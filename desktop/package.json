@@ -4,6 +4,7 @@
   "description": "Pulse: a menu bar app in Tauri, the files read in Rust, the panel in ui/",
   "scripts": {
     "setup": "npm install && npm --prefix ui install",
+    "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
