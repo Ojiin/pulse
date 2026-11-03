@@ -274,6 +274,8 @@ button {
 }
 .body > div {
   padding: 6px 8px 0;
+  /* the last card's margin counts to the measured height */
+  display: flow-root;
 }
 .body::-webkit-scrollbar {
   width: 0;

@@ -44,10 +44,13 @@ export function App() {
   const body = useRef<HTMLDivElement>(null)
   const foot = useRef<HTMLDivElement>(null)
 
-  // the window is as tall as its content, up to a limit; beyond it the list scrolls
+  // the window is as tall as its content, up to a limit; beyond it the list
+  // scrolls. The content is measured, not the list, which fills the window
+  // and so would never let it shrink again
   useLayoutEffect(() => {
     const measure = () => {
-      const h = (head.current?.offsetHeight ?? 0) + (body.current?.scrollHeight ?? 0) + (foot.current?.offsetHeight ?? 0)
+      const content = body.current?.firstElementChild as HTMLElement | null | undefined
+      const h = (head.current?.offsetHeight ?? 0) + (content?.offsetHeight ?? 0) + (foot.current?.offsetHeight ?? 0)
       void panelHeight(h)
     }
     const observer = new ResizeObserver(measure)
