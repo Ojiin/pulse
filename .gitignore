@@ -1,2 +1,4 @@
 .claude-plugin/types/
 .DS_Store
+# what Claude Code keeps for this folder on this Mac (local settings, approvals)
+.claude/
