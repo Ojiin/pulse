@@ -1,3 +1,6 @@
 # the renders are made from mockups/ with render.sh
 *.png
 *.gif
+# the film's renders and stills, made with video/render.mjs
+video/out/
+*.mp4
