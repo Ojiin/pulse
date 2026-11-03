@@ -1,0 +1,8 @@
+{
+  "name": "routine-recorder",
+  "version": "0.1.0",
+  "description": "Records every scheduled-routine run (turns, tool calls, pings, permission decisions, STATUS line) to ~/.claude/routine-recorder/runs for Pulse, and asks every session to end its answers with a STATUS comment",
+  "author": {
+    "name": "naphti88"
+  }
+}

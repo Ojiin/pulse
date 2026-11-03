@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Pulse – Design-Overhaul</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Three directions for the panel without the Projekte tab, with one set of
+     type icons and larger status marks. ?dark renders the dark theme. -->
+<style>
+:root {
+  --red: #e5484d; --amber: #e2900a; --violet: #8e4ec6; --teal: #12a594; --slate: #6b7a99; --blue: #3e7bfa; --green: #30a46c; --grey: #8e8e93;
+  --ink: #1d1d1f; --ink2: #3a3a3c; --mute: #6e6e73; --faint: #8e8e93;
+  --line: rgba(0,0,0,.08); --hover: rgba(0,0,0,.045); --fill: rgba(0,0,0,.055);
+  --panel: rgba(247,247,249,.94); --card: #fff; --seg-on: #fff;
+  --wall: linear-gradient(160deg, #9db0c4 0%, #c9c3c9 55%, #dccfc0 100%);
+  --sheet: rgba(255,255,255,.82);
+  --warn-bg: #fdf0d5; --warn-ink: #8a5a00;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+}
+[data-theme=dark] {
+  --red: #ff5f65; --amber: #ffb224; --violet: #b48cff; --teal: #3dd5be; --slate: #9aa8c7; --blue: #5b9bff; --green: #46c37b; --grey: #8b8b92;
+  --ink: #f2f2f4; --ink2: #d6d6db; --mute: #a1a1a8; --faint: #8b8b92;
+  --line: rgba(255,255,255,.09); --hover: rgba(255,255,255,.06); --fill: rgba(255,255,255,.08);
+  --panel: rgba(36,36,40,.94); --card: #2c2c31; --seg-on: rgba(255,255,255,.16);
+  --wall: linear-gradient(160deg, #1f2a3a 0%, #2a2633 55%, #3a2f2a 100%);
+  --sheet: rgba(30,30,34,.86);
+  --warn-bg: rgba(255,178,36,.18); --warn-ink: #ffcf73;
+}
+* { box-sizing: border-box }
+body { margin: 0; font: 13px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--ink); background: var(--wall); min-height: 100vh; -webkit-font-smoothing: antialiased }
+.page { width: 1440px; margin: 0 auto; padding: 34px 30px 50px }
+.top { display: flex; align-items: baseline; gap: 16px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.35) }
+.top h1 { margin: 0; font-size: 26px; letter-spacing: -.01em }
+.top span { opacity: .9 }
+.top button { margin-left: auto; font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; background: rgba(255,255,255,.25); color: #fff; text-shadow: none; backdrop-filter: blur(8px) }
+
+/* glyphs */
+.g { display: inline-block; flex: none; vertical-align: middle }
+.g svg { width: 100%; height: 100%; display: block }
+.spin svg { animation: spin 1.2s linear infinite }
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes halo { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 45%, transparent) } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--red) 0%, transparent) } }
+@keyframes sweep { from { transform: translateX(-100%) } to { transform: translateX(300%) } }
+@keyframes rot { to { --a: 360deg } }
+
+/* the icon sheet */
+.sheet { margin: 22px 0 34px; background: var(--sheet); backdrop-filter: blur(20px); border-radius: 16px; padding: 22px 26px; box-shadow: 0 10px 40px rgba(0,0,0,.18); display: grid; grid-template-columns: 1fr 1.55fr; gap: 34px }
+.sheet h2 { margin: 0 0 4px; font-size: 15px }
+.sheet .sub { margin: 0 0 16px; color: var(--mute); font-size: 12.5px }
+.types { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px }
+.ty { display: grid; justify-items: center; align-content: start; gap: 8px; padding: 14px 4px 12px; border-radius: 12px; background: var(--fill); text-align: center }
+.ty .big { color: var(--ink2) }
+.ty b { font-size: 12.5px }
+.ty small { color: var(--mute); font-size: 11px; line-height: 1.3 }
+.ty .sizes { display: flex; gap: 8px; align-items: end; color: var(--mute) }
+.states { display: grid; grid-template-columns: 74px repeat(8, 1fr); gap: 10px 6px; align-items: center }
+.states .lab { font-size: 11px; color: var(--mute); text-align: center }
+.states .rowlab { font-size: 11.5px; font-weight: 600; color: var(--ink2) }
+.states .cell { display: grid; place-items: center }
+
+/* the three panels */
+.dirs { display: grid; grid-template-columns: repeat(3, 420px); justify-content: space-between; align-items: start }
+.cap { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); margin: 0 4px 12px; min-height: 64px }
+.cap b { font-size: 17px; display: block; margin-bottom: 2px }
+.cap span { font-size: 12.5px; opacity: .95 }
+.panel { width: 420px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 .5px rgba(0,0,0,.25), 0 22px 60px rgba(0,0,0,.32) }
+
+/* ——— A · Klar ——— */
+.A { background: var(--panel); backdrop-filter: blur(30px) }
+.A .hdr { padding: 13px 14px 6px }
+.A .counts { display: flex; gap: 4px; flex-wrap: nowrap; margin-bottom: 11px }
+.A .cnt { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; border-radius: 99px; font-weight: 650; font-size: 11.5px; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); --knock: color-mix(in srgb, var(--c) 13%, var(--card)) }
+.A .strip { border-radius: 11px; background: color-mix(in srgb, var(--blue) 7%, var(--card)); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--blue) 25%, transparent); margin-bottom: 11px; overflow: hidden }
+.A .sh2 { display: flex; align-items: center; gap: 6px; padding: 8px 12px 2px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--blue) }
+.A .sh2 i { margin-left: auto; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--faint) }
+.A .sr { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; column-gap: 10px; padding: 8px 12px 9px }
+.A .sr + .sr { border-top: .5px solid color-mix(in srgb, var(--blue) 15%, transparent) }
+.A .sr > .g { grid-row: 1 / 4; margin-top: 1px; color: var(--blue) }
+.A .sr b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.A .sr .tm { font: 500 11.5px var(--mono); color: var(--blue) }
+.A .sr .meta { grid-column: 2 / 4 }
+.A .doing { grid-column: 2 / 4; font: 11.5px var(--mono); color: color-mix(in srgb, var(--blue) 70%, var(--ink)); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.A .agent { grid-column: 2 / 4; display: grid; grid-template-columns: 15px 1fr auto; gap: 7px; align-items: center; margin-top: 5px; padding: 4px 8px; border-radius: 7px; background: color-mix(in srgb, var(--blue) 8%, transparent); font-size: 12px; color: var(--ink2) }
+.A .agent .g { color: var(--blue) }
+.A .agent em { font-style: normal; font: 11px var(--mono); color: var(--mute) }
+.A .seg { display: flex; gap: 6px; align-items: center }
+.A .tabs { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--fill); border-radius: 9px; padding: 2px }
+.A .tabs span { text-align: center; padding: 5px 0; border-radius: 7px; font-weight: 500; font-size: 12.5px }
+.A .tabs .on { background: var(--seg-on); box-shadow: 0 1px 2px rgba(0,0,0,.14); font-weight: 600 }
+.A .tabs small { color: var(--red); font-weight: 700; margin-left: 4px }
+.A .tb { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--fill); color: var(--mute) }
+.A .sec { border-top: .5px solid var(--line) }
+.A .sh { display: flex; align-items: center; gap: 7px; padding: 10px 14px 3px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--c) }
+.A .sh .n { margin-left: auto; color: var(--faint); font-weight: 500; letter-spacing: 0 }
+.A .row { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; column-gap: 11px; padding: 8px 14px 10px; position: relative }
+.A .row:hover { background: var(--hover) }
+.A .tile { grid-row: 1 / 4; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--card)); --knock: color-mix(in srgb, var(--c) 14%, var(--card)); margin-top: 1px }
+.A .row.blk .tile { background: var(--red); color: #fff; --knock: var(--red); animation: halo 1.6s ease-out infinite }
+.A .title { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.005em }
+.A .age { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--mute); padding: 1px 7px; border-radius: 6px; align-self: start; margin-top: 1px; white-space: nowrap }
+.A .age.warn { background: var(--warn-bg); color: var(--warn-ink) }
+.A .age.alarm { background: var(--red); color: #fff; font-weight: 600 }
+.A .meta { grid-column: 2 / 4; display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink2); font-weight: 500; margin-top: 1px; white-space: nowrap; overflow: hidden }
+.A .meta .g { color: var(--faint) }
+.A .meta .dot { color: var(--faint); margin: 0 2px }
+.A .meta .ty2 { color: var(--mute); font-weight: 400; display: inline-flex; gap: 4px; align-items: center }
+.A .say { grid-column: 2 / 4; margin: 3px 0 0; font-size: 12.5px; color: var(--mute); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.A .fold { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: .5px solid var(--line); font-weight: 600; font-size: 12.5px; color: var(--ink2) }
+.A .fold .n { margin-left: auto; color: var(--faint); font-weight: 400; font-size: 12px }
+.A .fold .chev { color: var(--faint); font-size: 8px }
+.A .foot { border-top: .5px solid var(--line); padding: 8px 14px; display: flex; justify-content: space-between; color: var(--faint); font-size: 11.5px }
+.A .flag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; color: var(--teal); background: color-mix(in srgb, var(--teal) 14%, transparent); align-self: start; margin-top: 1px; white-space: nowrap }
+
+/* ——— B · Karten ——— */
+.B { background: color-mix(in srgb, var(--panel) 100%, transparent); backdrop-filter: blur(30px); padding-bottom: 4px }
+.B .hdr { padding: 14px 12px 8px }
+.B .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px }
+.B .st { border-radius: 11px; padding: 8px 10px 7px; background: var(--card); box-shadow: 0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.05); display: grid; grid-template-columns: auto 1fr; column-gap: 7px; align-items: center }
+.B .st .num { font-size: 21px; font-weight: 750; color: var(--c); line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums }
+.B .st .g { justify-self: end; color: var(--c); --knock: var(--card) }
+.B .st small { grid-column: 1 / 3; font-size: 11px; font-weight: 600; color: var(--mute); margin-top: 3px }
+.B .st.zero .num, .B .st.zero .g { color: var(--faint); opacity: .55 }
+.B .tabs { display: flex; gap: 2px; align-items: center; border-bottom: .5px solid var(--line); margin: 0 -12px; padding: 0 12px }
+.B .tabs span { padding: 7px 10px 8px; font-weight: 550; font-size: 13px; color: var(--mute); border-bottom: 2px solid transparent; margin-bottom: -.5px }
+.B .tabs .on { color: var(--ink); border-color: var(--ink); font-weight: 650 }
+.B .tabs small { font-size: 10.5px; font-weight: 700; color: #fff; background: var(--red); border-radius: 99px; padding: 0 5px; margin-left: 5px; vertical-align: 1px }
+.B .tabs .tools { margin-left: auto; display: flex; gap: 10px; color: var(--mute) }
+.B .body { padding: 6px 10px 6px }
+.B .card { background: var(--card); border-radius: 13px; box-shadow: 0 0 0 .5px var(--line), 0 2px 6px rgba(0,0,0,.05); margin-bottom: 9px; overflow: hidden; position: relative }
+.B .ch { display: flex; align-items: center; gap: 7px; padding: 9px 12px 4px; font-size: 12px; font-weight: 700; color: var(--c) }
+.B .ch .n { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--faint) }
+.B .card.run::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--blue), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: bar 2.4s linear infinite }
+@keyframes bar { from { background-position: -100% 0 } to { background-position: 200% 0 } }
+.B .row { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; column-gap: 11px; padding: 8px 12px 10px }
+.B .row + .row { border-top: .5px solid var(--line) }
+.B .av { grid-row: 1 / 4; width: 38px; height: 38px; position: relative; margin-top: 1px }
+.B .disc { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #fff; --knock: var(--c) }
+.B .disc.soft { background: color-mix(in srgb, var(--c) 15%, var(--card)); color: var(--c); --knock: color-mix(in srgb, var(--c) 15%, var(--card)) }
+.B .badge { position: absolute; right: -4px; bottom: -3px; width: 19px; height: 19px; border-radius: 50%; background: var(--card); box-shadow: 0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.15); display: grid; place-items: center; color: var(--ink2) }
+.B .title { font-size: 14px; font-weight: 680; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em }
+.B .age { font-size: 11.5px; font-weight: 600; color: var(--mute); font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: 1px }
+.B .age.warn { color: var(--warn-ink) }
+.B .age.alarm { color: var(--red) }
+.B .age.alarm::before { content: '● '; font-size: 9px; vertical-align: 1px }
+.B .meta { grid-column: 2 / 4; display: flex; gap: 6px; align-items: center; margin-top: 3px; white-space: nowrap; overflow: hidden }
+.B .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 5px; border-radius: 6px; background: var(--fill); font-size: 11.5px; font-weight: 600; color: var(--ink2) }
+.B .chip .g { color: var(--faint) }
+.B .from { font-size: 11.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis }
+.B .say { grid-column: 2 / 4; margin: 4px 0 0; font-size: 12.5px; color: var(--mute); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.B .doing { grid-column: 2 / 4; margin-top: 4px; font: 11.5px var(--mono); color: color-mix(in srgb, var(--blue) 70%, var(--ink)) }
+.B .agents { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px }
+.B .ag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 5px; border-radius: 99px; background: color-mix(in srgb, var(--blue) 11%, transparent); color: color-mix(in srgb, var(--blue) 80%, var(--ink)); font-size: 11.5px; font-weight: 550 }
+.B .ag em { font: 10.5px var(--mono); font-style: normal; opacity: .75 }
+.B .tm { font: 600 11.5px var(--mono); color: var(--blue); margin-top: 1px }
+.B .folds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px }
+.B .fold { background: var(--card); border-radius: 11px; box-shadow: 0 0 0 .5px var(--line); padding: 8px 11px; display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 12.5px; color: var(--ink2) }
+.B .fold .n { margin-left: auto; color: var(--faint); font-weight: 500 }
+.B .row.blk .disc { box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 22%, transparent) }
+
+/* ——— C · Cockpit ——— */
+.C { --c-bg: #0d1016; --c-card: #151a23; --c-line: rgba(255,255,255,.07); --c-ink: #edf0f6; --c-mute: #8d97a8; --c-faint: #5f6878;
+  --red: #ff5a64; --amber: #ffb224; --violet: #b48cff; --teal: #3dd5be; --slate: #9aa8c7; --blue: #5aa2ff; --green: #46c37b;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(90,162,255,.13), transparent 55%), radial-gradient(90% 50% at 100% 0%, rgba(180,140,255,.10), transparent 60%), var(--c-bg);
+  color: var(--c-ink); box-shadow: 0 0 0 .5px rgba(255,255,255,.12), 0 22px 60px rgba(0,0,0,.5) }
+.C .hdr { padding: 14px 14px 6px }
+.C .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; color: var(--c-mute) }
+.C .brand b { color: var(--c-ink); font-size: 13px; letter-spacing: .02em }
+.C .brand .live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green) }
+.C .brand .tools { margin-left: auto; display: flex; gap: 12px; color: var(--c-mute) }
+.C .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px }
+.C .tl { border-radius: 10px; padding: 8px 10px 8px; background: color-mix(in srgb, var(--c) 9%, var(--c-card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent), 0 0 18px -6px var(--c) }
+.C .tl.zero { background: var(--c-card); box-shadow: inset 0 0 0 1px var(--c-line) }
+.C .tl .num { font: 700 22px/1 var(--mono); color: var(--c); letter-spacing: -.03em }
+.C .tl.zero .num { color: var(--c-faint) }
+.C .tl small { display: block; margin-top: 5px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--c-mute) }
+.C .run { border-radius: 12px; background: var(--c-card); box-shadow: inset 0 0 0 1px rgba(90,162,255,.22); padding: 4px 0; margin-bottom: 12px; position: relative; overflow: hidden }
+.C .sr { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; column-gap: 9px; padding: 8px 12px 8px; position: relative }
+.C .sr + .sr { border-top: 1px solid var(--c-line) }
+.C .sr > .g { grid-row: 1 / 3; color: var(--blue); filter: drop-shadow(0 0 4px rgba(90,162,255,.6)) }
+.C .sr b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.C .sr .tm { font: 600 12px var(--mono); color: var(--blue) }
+.C .sr .meta, .C .sr .doing, .C .sr .tree { grid-column: 2 / 4 }
+.C .doing { font: 11.5px var(--mono); color: #9fc4ff; margin-top: 3px }
+.C .doing::before { content: '› '; color: var(--blue) }
+.C .tree { font: 11.5px var(--mono); color: var(--c-mute); display: grid; grid-template-columns: auto 15px 1fr auto; gap: 0 6px; align-items: center; margin-top: 3px }
+.C .tree .br { color: var(--c-faint) }
+.C .tree .g { color: var(--blue) }
+.C .tree span:nth-child(3) { color: var(--c-ink); font-family: -apple-system, sans-serif; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.C .sr .bar { position: absolute; left: 0; bottom: 0; height: 1px; width: 30%; background: linear-gradient(90deg, transparent, var(--blue), transparent); animation: sweep 2.2s linear infinite }
+.C .tabs { display: flex; gap: 4px; margin-bottom: 2px }
+.C .tabs span { padding: 5px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 550; color: var(--c-mute) }
+.C .tabs .on { background: rgba(255,255,255,.08); color: var(--c-ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08) }
+.C .tabs small { color: var(--red); font: 700 11px var(--mono); margin-left: 5px }
+.C .sh { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c) }
+.C .sh::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 40%, transparent), transparent) }
+.C .sh .n { order: 2; font: 600 11px var(--mono); color: var(--c-faint); letter-spacing: 0 }
+.C .row { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; column-gap: 11px; padding: 8px 14px 10px 14px; position: relative }
+.C .row::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--c); box-shadow: 0 0 10px var(--c) }
+.C .ring { grid-row: 1 / 4; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--c); --knock: #1a1f29; background: radial-gradient(circle, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%), #1a1f29; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 70%, transparent), 0 0 14px -3px var(--c); margin-top: 1px }
+.C .row.blk .ring { animation: halo 1.6s ease-out infinite }
+.C .title { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.C .age { font: 500 11px var(--mono); color: var(--c-mute); white-space: nowrap; margin-top: 2px }
+.C .age.warn { color: var(--amber) }
+.C .age.alarm { color: #fff; background: var(--red); padding: 1px 6px; border-radius: 5px; box-shadow: 0 0 10px rgba(255,90,100,.5) }
+.C .meta { grid-column: 2 / 4; display: flex; align-items: center; gap: 6px; margin-top: 2px; font: 11.5px var(--mono); color: #b9c3d4; white-space: nowrap; overflow: hidden }
+.C .meta .g { color: var(--c-mute) }
+.C .meta .sep { color: var(--c-faint) }
+.C .meta .ty2 { display: inline-flex; gap: 4px; align-items: center; font-family: -apple-system, sans-serif; font-size: 11.5px; color: var(--c-mute) }
+.C .say { grid-column: 2 / 4; margin: 4px 0 0; font-size: 12.5px; color: var(--c-mute); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.C .flag { font: 600 10.5px var(--mono); color: var(--teal); border: 1px solid color-mix(in srgb, var(--teal) 50%, transparent); padding: 0 6px; border-radius: 5px; white-space: nowrap; margin-top: 1px; align-self: start }
+.C .fold { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--c-line); font-size: 12.5px; font-weight: 600; color: var(--c-mute) }
+.C .fold .n { margin-left: auto; font: 11px var(--mono); color: var(--c-faint) }
+.C .foot { border-top: 1px solid var(--c-line); padding: 8px 14px; display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--c-faint) }
+</style></head>
+<body>
+<div class="page">
+  <div class="top">
+    <h1>Pulse · Design-Overhaul</h1>
+    <span>Ohne „Projekte“ · ein Icon-Satz für alle Typen · größere Status-Marken · Titel → Ordner → Text</span>
+    <button onclick="toggleTheme()">Hell / Dunkel</button>
+  </div>
+  <div class="sheet" id="sheet"></div>
+  <div class="dirs">
+    <div><div class="cap"><b>A · Klar</b><span>Das native macOS-Panel, aufgeräumt. Status als getönte Kachel, drei klare Zeilen, Typ als Wort neben dem Ordner.</span></div><div class="panel A" id="A"></div></div>
+    <div><div class="cap"><b>B · Karten</b><span>Jede Gruppe eine Karte, Status als farbige Scheibe mit Typ-Plakette. Kennzahlen oben, Ordner als Chip.</span></div><div class="panel B" id="B"></div></div>
+    <div><div class="cap"><b>C · Cockpit</b><span>Dunkel, mit Leuchten. Zahlen-Kacheln, Subagents als Baum, Ordner in Mono. Am meisten Spaß, am wenigsten „Apple“.</span></div><div class="panel C" id="C"></div></div>
+  </div>
+</div>
+<script>
+// status shapes as in desktop/ui/src/glyphs.tsx; the type shapes are new
+const G = {
+  blocked: `<path d="M6 1h6l5 5v6l-5 5H6l-5-5V6z" fill="currentColor"/><path d="M9 4.8v5" stroke="var(--knock)" stroke-width="2.1" stroke-linecap="round"/><circle cx="9" cy="12.9" r="1.2" fill="var(--knock)"/>`,
+  waiting: `<path d="M3 2.5h12A2 2 0 0117 4.5v7.2a2 2 0 01-2 2H8.4L4.6 16.6v-2.9H3a2 2 0 01-2-2V4.5a2 2 0 012-2z" fill="currentColor"/><path d="M7.2 6.3a1.9 1.9 0 113 1.5c-.6.4-1.2.8-1.2 1.6" fill="none" stroke="var(--knock)" stroke-width="1.6" stroke-linecap="round"/><circle cx="9" cy="11.3" r=".95" fill="var(--knock)"/>`,
+  review: `<path d="M1 9c2-3.8 4.8-5.6 8-5.6S15 5.2 17 9c-2 3.8-4.8 5.6-8 5.6S3 12.8 1 9z" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="var(--knock)"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/>`,
+  running: `<circle cx="9" cy="9" r="6.6" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="2.6"/><path d="M9 2.4a6.6 6.6 0 016.6 6.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="9" r="2" fill="currentColor"/>`,
+  commands: `<path d="M3.2 1.6h11.6M3.2 16.4h11.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.8 2.4h8.4v2.4c0 1.7-1.3 3-3 4.2 1.7 1.2 3 2.5 3 4.2v2.4H4.8v-2.4c0-1.7 1.3-3 3-4.2-1.7-1.2-3-2.5-3-4.2z" fill="currentColor"/><path d="M6.5 4.1h5c-.1.5-.4 1-.8 1.4H7.3c-.4-.4-.7-.9-.8-1.4zM9 11c-1 .6-1.9 1.4-2.3 2.6v.5h4.6v-.5C10.9 12.4 10 11.6 9 11z" fill="var(--knock)"/>`,
+  parked: `<circle cx="9" cy="9" r="7.6" fill="currentColor"/><path d="M7 5.9v6.2M11 5.9v6.2" stroke="var(--knock)" stroke-width="2" stroke-linecap="round"/>`,
+  done: `<circle cx="9" cy="9" r="7.6" fill="currentColor"/><path d="M5.4 9.3l2.4 2.4 4.8-5" fill="none" stroke="var(--knock)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>`,
+  follow: `<path d="M4 1.8v14.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.6 2.6h10l-2.6 3.6 2.6 3.6h-10z" fill="currentColor"/>`,
+  // types: a session is a window; you started it (prompt), Claude did (spark),
+  // a subagent is a small window hanging off its session; a routine turns
+  routine: `<path d="M3.2 8A5.9 5.9 0 0113.6 5M14.8 10A5.9 5.9 0 014.4 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14.4 2.2v3.4H11M3.6 15.8v-3.4H7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  termin: `<rect x="2.2" y="3.4" width="13.6" height="12.4" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.4 7.4h13.2M6 1.8v3M12 1.8v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="9" cy="11.4" r="1.6" fill="currentColor"/>`,
+  du: `<rect x="1.8" y="2.6" width="14.4" height="12.8" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.2 6.9l2.4 2.1-2.4 2.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.6 11.2h3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  claude: `<rect x="1.8" y="2.6" width="14.4" height="12.8" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.9C9.3 7.4 9.8 8.1 12.4 9 9.8 9.9 9.3 10.6 9 13.1 8.7 10.6 8.2 9.9 5.6 9 8.2 8.1 8.7 7.4 9 4.9z" fill="currentColor"/>`,
+  agent: `<circle cx="4.4" cy="3.9" r="2.3" fill="currentColor"/><path d="M4.4 6.4v4.4a2.4 2.4 0 002.4 2.4h2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="9.6" y="9.9" width="6.6" height="6.6" rx="1.9" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
+  folder: `<path d="M1.8 4.6a1.6 1.6 0 011.6-1.6h3.4l1.8 1.8h6a1.6 1.6 0 011.6 1.6v7.4a1.6 1.6 0 01-1.6 1.6H3.4a1.6 1.6 0 01-1.6-1.6z" fill="currentColor"/>`,
+  gear: `<path d="M14.90 6.78L17.04 7.37V10.63L14.90 11.22L14.74 11.60L15.83 13.53L13.53 15.83L11.60 14.74L11.22 14.90L10.63 17.04H7.37L6.78 14.90L6.40 14.74L4.47 15.83L2.17 13.53L3.26 11.60L3.10 11.22L0.96 10.63V7.37L3.10 6.78L3.26 6.40L2.17 4.47L4.47 2.17L6.40 3.26L6.78 3.10L7.37 0.96H10.63L11.22 3.10L11.60 3.26L13.53 2.17L15.830 4.47L14.74 6.40z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="9" cy="9" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>`,
+  pinOff: `<path d="M11.6 1.8l4.6 4.6-1.4 1.4-1-.4-2.6 2.6.3 3.2-1.3 1.3-3.3-3.3-3.9 3.9-.9-.9 3.9-3.9-3.3-3.3 1.3-1.3 3.2.3 2.6-2.6-.4-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>`,
+  external: `<path d="M10 2.5h5.5V8M15.2 2.8L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 11v3a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 013 14V7a1.5 1.5 0 011.5-1.5h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+}
+const g = (n, s = 16, cls = '') => `<span class="g ${cls}" style="width:${s}px;height:${s}px"><svg viewBox="0 0 18 18">${G[n]}</svg></span>`
+
+const C = { blocked: 'var(--red)', waiting: 'var(--amber)', review: 'var(--violet)', running: 'var(--blue)', commands: 'var(--teal)', parked: 'var(--slate)', follow: 'var(--grey)', done: 'var(--green)' }
+const SL = { blocked: 'Blockiert', waiting: 'Rückfrage', review: 'Ansehen', running: 'Läuft', commands: 'Befehl prüfen', parked: 'Geparkt', follow: 'Später', done: 'Erledigt' }
+const TL = { routine: 'Routine', termin: 'Termin', du: 'Session', claude: 'von Claude', agent: 'Subagent' }
+const TD = { routine: 'wiederkehrend geplant', termin: 'einmal geplant', du: 'von dir gestartet', claude: 'von einer Session gestartet', agent: 'arbeitet in einer Session' }
+
+const RUN = [
+  { title: 'Pulse: Design-Overhaul', proj: 'claude-dashboard', type: 'du', tm: '4:12', doing: 'Write · overhaul.html', agents: [{ k: 'Explore', d: 'Icons im Code finden', tm: '0:41' }, { k: 'general-purpose', d: 'Kontraste prüfen', tm: '0:18' }] },
+  { title: 'Link-Check mittags', proj: 'shop-web', type: 'routine', tm: '1:05', doing: 'WebFetch · example.com', agents: [] },
+  { title: 'Changelog nachziehen', proj: 'shop-api', type: 'claude', tm: '0:22', doing: 'denkt nach', agents: [] },
+]
+const OPEN = [
+  { s: 'blocked', title: 'Täglicher Backup-Check', proj: 'shop-web', type: 'routine', age: 'seit 5 h', lvl: 'warn', say: 'Freigabe für den Restore-Test abgelehnt; drei Bereiche ohne Ergebnis.' },
+  { s: 'waiting', title: 'Feed-Import nachholen', proj: 'shop-web', type: 'termin', age: 'seit 5 Tagen', lvl: 'alarm', say: 'Wartet auf deine Entscheidung, ob die 61 Artikel aus dem Feed nachgeholt werden sollen.' },
+  { s: 'waiting', title: 'Preis-Watch', proj: 'shop-api', type: 'routine', age: 'seit 4 h', lvl: 'warn', say: 'Soll ein neuer Anbieter in die Preisliste aufgenommen werden?' },
+  { s: 'waiting', title: 'Paywall: drei Wege', proj: 'shop-api', type: 'claude', from: 'Lieferanten-Daten', age: 'seit 40 min', lvl: '', say: 'Drei Wege vorgeschlagen, wieder an die Lieferanten-Daten zu kommen. Welcher soll es werden?' },
+  { s: 'review', title: 'Radar als Desktop-App', proj: 'claude-dashboard', type: 'du', age: 'seit 20 min', lvl: '', say: 'Umbau fertig, die App liegt unter /Applications/Radar.app.' },
+  { s: 'review', title: 'Link-Check morgens', proj: 'shop-web', type: 'routine', age: 'seit 7 h', lvl: 'warn', say: '24 Links geprüft, 2 kaputt, Ping gesendet.' },
+]
+const CMD = { title: 'npm run dev', proj: 'travel-blog', flag: 'vergessen?', say: 'läuft seit 3 h · 412 MB · :5173 · Session still seit 70 min' }
+const GROUPS = ['blocked', 'waiting', 'review']
+const count = s => OPEN.filter(o => o.s === s).length
+
+// ——— the icon sheet ———
+function sheet() {
+  const types = ['du', 'claude', 'agent', 'routine', 'termin'].map(t => `
+    <div class="ty"><span class="big">${g(t, 30)}</span>
+      <div class="sizes">${g(t, 12)}${g(t, 14)}${g(t, 18)}</div>
+      <b>${TL[t]}</b><small>${TD[t]}</small></div>`).join('')
+  const st = ['blocked', 'waiting', 'review', 'running', 'commands', 'follow', 'parked', 'done']
+  const cell = (s, html) => `<div class="cell" style="--c:${C[s]}">${html}</div>`
+  const tileA = s => `<div class="A" style="background:none"><span class="tile" style="display:grid">${g(s, 19)}</span></div>`
+  const discB = s => `<div class="B" style="background:none"><span class="disc ${s === 'follow' || s === 'parked' || s === 'done' ? 'soft' : ''}">${g(s, 19)}</span></div>`
+  const ringC = s => `<div class="C" style="background:none;box-shadow:none"><span class="ring" style="display:grid">${g(s, 17)}</span></div>`
+  return `
+    <div><h2>Typ: was es ist</h2><p class="sub">Grau, immer an derselben Stelle. Sessions sind ein Fenster, Routinen drehen sich.</p><div class="types">${types}</div></div>
+    <div><h2>Status: was es von dir will</h2><p class="sub">Farbig und groß, die Formen bleiben die der Menüleiste. Drei Darstellungen, je Richtung eine.</p>
+      <div class="states"><span></span>${st.map(s => `<span class="lab">${SL[s]}</span>`).join('')}
+        <span class="rowlab">A · Kachel</span>${st.map(s => cell(s, tileA(s))).join('')}
+        <span class="rowlab">B · Scheibe</span>${st.map(s => cell(s, discB(s))).join('')}
+        <span class="rowlab">C · Ring</span>${st.map(s => cell(s, ringC(s))).join('')}
+      </div></div>`
+}
+
+// ——— A ———
+function A() {
+  const meta = o => `<div class="meta">${g('folder', 13)}<span>${o.proj}</span><span class="dot">·</span><span class="ty2">${g(o.type, 12)}${TL[o.type]}${o.from ? ` aus „${o.from}“` : ''}</span></div>`
+  const strip = `<div class="strip"><div class="sh2">${g('running', 12, 'spin')} Läuft <i>3</i></div>${RUN.map(r => `
+    <div class="sr">${g('running', 22, 'spin')}<b>${r.title}</b><span class="tm">${r.tm}</span>${meta(r)}
+      <div class="doing">▸ ${r.doing}</div>
+      ${r.agents.map(a => `<div class="agent">${g('agent', 13)}<span><b style="font-size:12px;font-weight:600">${a.k}</b> · ${a.d}</span><em>${a.tm}</em></div>`).join('')}
+    </div>`).join('')}</div>`
+  const row = o => `<div class="row ${o.s === 'blocked' ? 'blk' : ''}" style="--c:${C[o.s]}"><span class="tile">${g(o.s, 19)}</span>
+    <div class="title">${o.title}</div><span class="age ${o.lvl}">${o.age}</span>${meta(o)}<p class="say">${o.say}</p></div>`
+  const cmd = `<div class="sec" style="--c:var(--teal)"><div class="sh">${g('commands', 12)} Befehle prüfen <span class="n">1</span></div>
+    <div class="row" style="--c:var(--teal)"><span class="tile">${g('commands', 19)}</span><div class="title" style="font-family:var(--mono);font-size:13px">${CMD.title}</div><span class="flag">${CMD.flag}</span>
+    <div class="meta">${g('folder', 13)}<span>${CMD.proj}</span></div><p class="say">${CMD.say}</p></div></div>`
+  return `<div class="hdr">
+    <div class="counts">${['blocked', 'waiting', 'review', 'commands'].map(s => `<span class="cnt" style="--c:${C[s]}">${g(s, 17)}${s === 'commands' ? 1 : count(s)} ${{ blocked: 'blockiert', waiting: 'Rückfragen', review: 'ansehen', commands: 'Befehl' }[s]}</span>`).join('')}</div>
+    ${strip}
+    <div class="seg"><div class="tabs"><span class="on">Offen<small>7</small></span><span>Zeitachse</span><span>Verlauf</span></div>
+      <span class="tb">${g('gear', 14)}</span><span class="tb">${g('pinOff', 14)}</span><span class="tb">${g('external', 14)}</span></div></div>
+    ${cmd}
+    ${GROUPS.map(s => `<div class="sec" style="--c:${C[s]}"><div class="sh">${g(s, 12)} ${SL[s]} <span class="n">${count(s)}</span></div>${OPEN.filter(o => o.s === s).map(row).join('')}</div>`).join('')}
+    <div class="fold" style="--knock:var(--panel)"><span class="chev">▶</span>${g('follow', 14, '')}<span>Später</span><span class="n">3 · gelesen, noch offen</span></div>
+    <div class="fold" style="color:var(--ink2)"><span class="chev">▶</span><span style="color:var(--slate);--knock:var(--panel)">${g('parked', 14)}</span><span>Geparkt</span><span class="n">2 · im Hinterkopf</span></div>
+    <div class="foot"><span>Stand 15:42</span><span>7 erledigt heute</span></div>`
+}
+
+// ——— B ———
+function B() {
+  const av = (s, t, spin) => `<div class="av"><span class="disc">${g(s, 20, spin ? 'spin' : '')}</span><span class="badge">${g(t, 12)}</span></div>`
+  const meta = o => `<div class="meta"><span class="chip">${g('folder', 12)}${o.proj}</span>${o.from ? `<span class="from">aus „${o.from}“</span>` : ''}</div>`
+  const runCard = `<div class="card run" style="--c:var(--blue)"><div class="ch">${g('running', 14, 'spin')} Läuft gerade <span class="n">3</span></div>${RUN.map(r => `
+    <div class="row" style="--c:var(--blue)">${av('running', r.type, true)}<div class="title">${r.title}</div><span class="tm">${r.tm}</span>${meta(r)}
+      <div class="doing">▸ ${r.doing}</div>
+      ${r.agents.length ? `<div class="agents">${r.agents.map(a => `<span class="ag">${g('agent', 12)}${a.k}<em>${a.tm}</em></span>`).join('')}</div>` : ''}</div>`).join('')}</div>`
+  const card = s => `<div class="card" style="--c:${C[s]}"><div class="ch">${g(s, 14)} ${SL[s]} <span class="n">${count(s)}</span></div>
+    ${OPEN.filter(o => o.s === s).map(o => `<div class="row ${s === 'blocked' ? 'blk' : ''}" style="--c:${C[s]}">${av(s, o.type)}<div class="title">${o.title}</div><span class="age ${o.lvl}">${o.age.replace('seit ', '')}</span>${meta(o)}<p class="say">${o.say}</p></div>`).join('')}</div>`
+  const stat = (s, n, label) => `<div class="st ${n ? '' : 'zero'}" style="--c:${C[s]}"><span class="num">${n}</span>${g(s, 17)}<small>${label}</small></div>`
+  return `<div class="hdr">
+    <div class="stats">${stat('blocked', 1, 'Blockiert')}${stat('waiting', 3, 'Rückfragen')}${stat('review', 2, 'Ansehen')}${stat('commands', 1, 'Befehle')}</div>
+    <div class="tabs"><span class="on">Offen<small>7</small></span><span>Zeitachse</span><span>Verlauf</span><span class="tools">${g('gear', 15)}${g('pinOff', 15)}${g('external', 15)}</span></div></div>
+    <div class="body">${runCard}${GROUPS.map(card).join('')}
+      <div class="folds"><div class="fold" style="color:var(--ink2);--knock:var(--card)"><span style="color:var(--grey)">${g('follow', 14)}</span>Später<span class="n">3</span></div>
+      <div class="fold" style="--knock:var(--card)"><span style="color:var(--slate)">${g('parked', 14)}</span>Geparkt<span class="n">2</span></div></div></div>`
+}
+
+// ——— C ———
+function Cp() {
+  const meta = o => `<div class="meta">${g('folder', 12)}<span>${o.proj}/</span><span class="sep">·</span><span class="ty2">${g(o.type, 12)}${TL[o.type]}</span></div>`
+  const tile = (s, n, label) => `<div class="tl ${n ? '' : 'zero'}" style="--c:${C[s]}"><span class="num">${n}</span><small>${label}</small></div>`
+  const run = `<div class="run">${RUN.map(r => `
+    <div class="sr">${g('running', 20, 'spin')}<b>${r.title}</b><span class="tm">${r.tm}</span>${meta(r)}
+      <div class="doing">${r.doing}</div>
+      ${r.agents.map((a, i) => `<div class="tree"><span class="br">${i === r.agents.length - 1 ? '└─' : '├─'}</span>${g('agent', 12)}<span>${a.k} · ${a.d}</span><span>${a.tm}</span></div>`).join('')}
+      <span class="bar" style="animation-delay:${RUN.indexOf(r) * -0.7}s"></span></div>`).join('')}</div>`
+  const row = o => `<div class="row ${o.s === 'blocked' ? 'blk' : ''}" style="--c:${C[o.s]}"><span class="ring">${g(o.s, 17)}</span>
+    <div class="title">${o.title}</div><span class="age ${o.lvl}">${o.age.replace('seit ', '')}</span>${meta(o)}<p class="say">${o.say}</p></div>`
+  return `<div class="hdr">
+    <div class="brand"><span class="live"></span><b>PULSE</b><span>15:42</span><span class="tools">${g('gear', 14)}${g('pinOff', 14)}${g('external', 14)}</span></div>
+    <div class="tiles">${tile('blocked', 1, 'Blockiert')}${tile('waiting', 3, 'Rückfragen')}${tile('review', 2, 'Ansehen')}${tile('running', 3, 'Läuft')}</div>
+    ${run}
+    <div class="tabs"><span class="on">Offen<small>7</small></span><span>Zeitachse</span><span>Verlauf</span></div></div>
+    <div class="sh" style="--c:var(--teal)">Befehle prüfen <span class="n">1</span></div>
+    <div class="row" style="--c:var(--teal)"><span class="ring">${g('commands', 17)}</span><div class="title" style="font-family:var(--mono);font-size:13px">${CMD.title}</div><span class="flag">${CMD.flag}</span>
+      <div class="meta">${g('folder', 12)}<span>${CMD.proj}/</span></div><p class="say">${CMD.say}</p></div>
+    ${GROUPS.map(s => `<div class="sh" style="--c:${C[s]}">${SL[s]} <span class="n">${count(s)}</span></div>${OPEN.filter(o => o.s === s).map(row).join('')}`).join('')}
+    <div class="fold" style="margin-top:6px">▸ Später<span class="n">3</span></div>
+    <div class="fold">▸ Geparkt<span class="n">2</span></div>
+    <div class="foot"><span>stand 15:42:07</span><span>7 erledigt heute</span></div>`
+}
+
+function render() {
+  document.getElementById('sheet').innerHTML = sheet()
+  document.getElementById('A').innerHTML = A()
+  document.getElementById('B').innerHTML = B()
+  document.getElementById('C').innerHTML = Cp()
+}
+function toggleTheme() {
+  const d = document.documentElement
+  d.dataset.theme = d.dataset.theme === 'dark' ? 'light' : 'dark'
+}
+if (location.search.includes('dark')) document.documentElement.dataset.theme = 'dark'
+render()
+</script>
+</body></html>

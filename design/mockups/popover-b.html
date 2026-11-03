@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Popover B</title>
+<script src="data.js"></script>
+<style>
+  :root { --red: #ff5f57; --amber: #ffb224; --violet: #b58cff; --blue: #5b9bff; --green: #46c37b }
+  body { margin: 0; width: 560px; height: 820px; font: 13px/1.35 -apple-system, BlinkMacSystemFont, sans-serif; color: #ececee; overflow: hidden;
+    background: radial-gradient(900px 600px at 80% 0%, #2b3a55, transparent), linear-gradient(160deg, #10131a, #1b1f2a) }
+  .menubar { height: 26px; background: rgba(20,20,22,.6); backdrop-filter: blur(20px); display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 0 14px; font-size: 13px; font-weight: 500; color: #f5f5f7 }
+  .tray { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,.18); border-radius: 5px; padding: 2px 6px }
+  .glyph { width: 16px; height: 16px; position: relative } .glyph i { position: absolute; right: -2px; top: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 1.5px #3a3a3c }
+  .pop { position: absolute; top: 34px; right: 92px; width: 390px; background: rgba(28,29,33,.94); backdrop-filter: blur(30px); border-radius: 14px;
+    box-shadow: 0 0 0 .5px rgba(255,255,255,.14), 0 24px 60px rgba(0,0,0,.55); overflow: hidden }
+  .hdr { padding: 14px 16px 12px; display: flex; align-items: center; gap: 10px }
+  .hdr .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(255,95,87,.2) }
+  .hdr b { font-size: 14px } .hdr span { margin-left: auto; font: 11.5px ui-monospace, SFMono-Regular, monospace; color: #8b8d94 }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 12px 12px }
+  .tile { background: rgba(255,255,255,.05); border-radius: 9px; padding: 8px 9px; border: 1px solid transparent }
+  .tile.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent) }
+  .tile b { display: block; font: 600 20px/1.1 ui-monospace, SFMono-Regular, monospace; color: var(--c) }
+  .tile span { font-size: 11px; color: #a0a2a8 }
+  .list { border-top: 1px solid rgba(255,255,255,.07) }
+  .grp { padding: 10px 16px 4px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #7d8088; display: flex; gap: 6px }
+  .grp em { font-style: normal; margin-left: auto; color: #5d6068 }
+  .row { display: grid; grid-template-columns: 3px 1fr auto; gap: 1px 12px; padding: 8px 16px 9px 12px; position: relative }
+  .row .rail { grid-row: 1 / 3; background: var(--c); border-radius: 2px }
+  .row b { font-weight: 600; font-size: 13px; color: #f2f2f4 } .row .t { font: 11px ui-monospace, SFMono-Regular, monospace; color: #8b8d94; padding-top: 2px }
+  .row p { grid-column: 2 / 4; margin: 0; color: #a7a9b0; font-size: 12px }
+  .row.sel { background: rgba(255,255,255,.06) }
+  .acts { grid-column: 2 / 4; display: flex; gap: 6px; margin-top: 7px }
+  .acts span { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.08); color: #e2e3e6 }
+  .acts span.p { background: var(--c); color: #1b1c1f; font-weight: 600 }
+  .mini { display: flex; gap: 3px; padding: 6px 16px 12px; flex-wrap: wrap }
+  .strip { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 4px 16px; align-items: center; font-size: 12px; color: #c7c8cc }
+  .sq { display: inline-flex; gap: 2px } .sq i { width: 7px; height: 7px; border-radius: 2px; background: var(--c) } .sq i.o { background: none; box-shadow: inset 0 0 0 1px #5d6068 } .sq i.n { background: none; box-shadow: inset 0 0 0 1px #34363b }
+  .foot { border-top: 1px solid rgba(255,255,255,.07); padding: 9px 16px; display: flex; justify-content: space-between; font-size: 12px; color: #8b8d94 }
+  .foot b { color: var(--blue); font-weight: 500 }
+  kbd { font: 10.5px ui-monospace, monospace; background: rgba(255,255,255,.1); border-radius: 4px; padding: 1px 5px; color: #c7c8cc }
+  .cap { position: absolute; left: 22px; bottom: 22px; width: 520px; color: #fff }
+  .cap h2 { margin: 0 0 4px; font-size: 18px } .cap div { font-size: 12.5px; color: #c9cbd1 }
+</style></head>
+<body>
+<div class="menubar"><span class="tray"><span class="glyph"></span><b>6</b></span><span>Do. 29. Okt. 15:42</span></div>
+<div class="pop">
+  <div class="hdr"><span class="pulse"></span><b>Ein Lauf ist blockiert</b><span>15:42:08</span></div>
+  <div class="tiles">
+    <div class="tile on" style="--c:var(--red)"><b>1</b><span>blockiert</span></div>
+    <div class="tile" style="--c:var(--amber)"><b>3</b><span>braucht dich</span></div>
+    <div class="tile" style="--c:var(--violet)"><b>2</b><span>zum Ansehen</span></div>
+    <div class="tile" style="--c:var(--blue)"><b>1</b><span>läuft</span></div>
+  </div>
+  <div class="list" id="list"></div>
+  <div class="foot"><span><kbd>↑↓</kbd> wählen <kbd>↵</kbd> öffnen <kbd>E</kbd> erledigt</span><b>Alle Routinen →</b></div>
+</div>
+<div class="cap"><h2>B · Kontrollraum (dunkel)</h2><div>Vier Kacheln oben sind Zähler und Filter zugleich: ein Klick zeigt nur diesen Zustand. Liste mit Farbleiste und Direktaktionen, per Tastatur bedienbar. Unten die Routinen von heute als kleine Lauf-Streifen.</div></div>
+<script>
+document.querySelector('.glyph').innerHTML = RADAR + '<i></i>'
+const row = (it, c, acts, sel) => `<div class="row ${sel ? 'sel' : ''}" style="--c:${c}"><span class="rail"></span><b>${it.title}</b><span class="t">${it.when}</span><p>${it.detail}</p>${acts ? `<div class="acts">${acts}</div>` : ''}</div>`
+const sq = runs => `<span class="sq">${[...runs.slice(-10)].map(r => { const s = RUN[r]; const c = { worked: 'var(--green)', waiting: 'var(--amber)', blocked: 'var(--red)', review: 'var(--violet)', missed: '#ff8a3d' }[s]; return c ? `<i style="--c:${c}"></i>` : `<i class="${s === 'idle' ? 'o' : 'n'}"></i>` }).join('')}</span>`
+$('#list',
+  `<div class="grp">Blockiert<em>shop-web</em></div>` +
+  row(D.blocked[0], 'var(--red)', '<span class="p">Freigabe in Claude ansehen</span><span>Später</span><span>Erledigt</span>', true) +
+  `<div class="grp">Braucht dich</div>` + D.waiting.slice(0, 2).map(it => row(it, 'var(--amber)')).join('') +
+  `<div class="grp">Zum Ansehen</div>` + row(D.review[0], 'var(--violet)') +
+  `<div class="grp">Routinen heute<em>8 aktiv</em></div>` +
+  D.routines.slice(0, 4).map(r => `<div class="strip"><span>${r.name}</span>${sq(r.runs)}</div>`).join('') + '<div style="height:8px"></div>')
+</script>
+</body></html>

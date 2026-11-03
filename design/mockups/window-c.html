@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Fenster C</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="data.js"></script>
+<style>
+  :root { --red: #d9443f; --amber: #d98a0b; --violet: #7f4bc0; --blue: #2f6fe0; --green: #2f9e62; --orange: #e0681c; --paper: #f4f3ef; --ink: #23221f; --mute: #77756f; --line: #e6e3db }
+  body { margin: 0; width: 1440px; height: 940px; font: 13px/1.45 'IBM Plex Sans', sans-serif; color: var(--ink); background: linear-gradient(170deg, #b9c4c9, #e3d9cc 70%); overflow: hidden }
+  .win { position: absolute; inset: 20px 20px 70px; background: var(--paper); border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0,0,0,.2), 0 25px 60px rgba(60,50,30,.3); overflow: hidden }
+  .bar { height: 30px; display: flex; align-items: center; padding: 0 14px; gap: 8px } .bar i { width: 12px; height: 12px; border-radius: 50% }
+  .wrap { display: grid; grid-template-columns: 440px 1fr; gap: 26px; padding: 6px 30px 0 }
+  .now small, .h small { font: 500 11px 'IBM Plex Mono', monospace; color: var(--mute); letter-spacing: .05em }
+  .now h1 { font-size: 30px; font-weight: 600; margin: 4px 0 4px; letter-spacing: -.015em }
+  .now > p { margin: 0 0 14px; color: #55534d; font-size: 14px }
+  .seg { display: flex; height: 8px; gap: 3px; margin-bottom: 18px } .seg i { border-radius: 99px; background: var(--c) }
+  .card { background: #fff; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(60,50,30,.08); border-left: 4px solid var(--c); margin-bottom: 10px }
+  .card .k { font: 500 10.5px 'IBM Plex Mono', monospace; color: var(--c); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between } .card .k span { color: var(--mute) }
+  .card b { display: block; font-size: 15px; font-weight: 600; margin: 4px 0 2px } .card p { margin: 0; color: #4c4a45 }
+  .card .acts { display: flex; gap: 6px; margin-top: 11px } .card .acts span { font-size: 12px; padding: 5px 11px; border-radius: 8px; background: #f1efe9 } .card .acts span.p { background: var(--ink); color: #fff }
+  .mini { background: #fff; border-radius: 12px; padding: 4px 14px; box-shadow: 0 1px 2px rgba(60,50,30,.08); margin-bottom: 10px }
+  .mini .r { display: grid; grid-template-columns: 9px 1fr auto; gap: 0 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); align-items: baseline }
+  .mini .r:last-child { border: none } .mini .d { width: 8px; height: 8px; border-radius: 50%; background: var(--c) }
+  .mini .r b { font-weight: 600 } .mini .r span { font: 11.5px 'IBM Plex Mono', monospace; color: var(--mute) }
+  .mini .r p { grid-column: 2 / 4; margin: 0; color: #66645e; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .mh { display: flex; justify-content: space-between; padding: 8px 2px 6px; font-weight: 600; color: #4c4a45 } .mh span { color: var(--mute); font-weight: 400 }
+  .h { display: flex; align-items: baseline; gap: 14px; margin: 10px 0 12px } .h h2 { margin: 0; font-size: 18px; font-weight: 600 }
+  .tabs { margin-left: auto; display: flex; gap: 2px; background: #e9e6df; border-radius: 8px; padding: 2px } .tabs span { padding: 3px 12px; border-radius: 6px; font-size: 12px; color: #55534d } .tabs .on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+  .proj { background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(60,50,30,.08); margin-bottom: 12px; overflow: hidden }
+  .ph { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-weight: 600; font-size: 14px }
+  .ph i { font-style: normal; color: var(--mute); font-size: 10px; width: 10px } .ph .cnt { margin-left: auto; display: flex; gap: 6px }
+  .chip { font: 500 11px 'IBM Plex Mono', monospace; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--c) 13%, #fff); color: var(--c) }
+  .chip.g { --c: #8a877f }
+  .rt { display: grid; grid-template-columns: 1fr 190px 210px 120px; align-items: center; gap: 14px; padding: 9px 16px 9px 36px; border-top: 1px solid var(--line) }
+  .rt b { font-weight: 500 } .rt .s { font-size: 12px; color: var(--mute) }
+  .sq { display: inline-flex; gap: 3px } .sq i { width: 11px; height: 11px; border-radius: 3px; background: var(--c) } .sq i.o { background: none; box-shadow: inset 0 0 0 1.5px #c9c5bb } .sq i.n { background: none; box-shadow: inset 0 0 0 1.5px #ece9e2 } .sq i.dash { background: none; box-shadow: none; outline: 1.5px dashed var(--orange); outline-offset: -2px }
+  .rt .nx { font: 11.5px 'IBM Plex Mono', monospace; color: var(--mute); text-align: right }
+  .cap { position: absolute; left: 24px; bottom: 16px; color: #2b2a27; font-size: 13px } .cap b { font-size: 16px; margin-right: 10px }
+</style></head>
+<body>
+<div class="win">
+  <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+  <div class="wrap">
+    <div class="now">
+      <small>DONNERSTAG, 29. OKTOBER · 15:42</small>
+      <h1>Eine Sache hängt.</h1>
+      <p>Der Backup-Check braucht eine Freigabe. Danach warten 3 Rückmeldungen und 2 fertige Ergebnisse. Eine Session arbeitet gerade.</p>
+      <div class="seg"><i style="--c:var(--red);flex:1"></i><i style="--c:var(--amber);flex:3"></i><i style="--c:var(--violet);flex:2"></i><i style="--c:var(--blue);flex:1"></i><i style="--c:#dcd8cf;flex:8"></i></div>
+      <div id="top"></div>
+      <div class="mh"><span style="color:#4c4a45;font-weight:600">▼ Braucht dich</span><span>3</span></div><div class="mini" id="wait"></div>
+      <div class="mh"><span style="color:#4c4a45;font-weight:600">▼ Zum Ansehen</span><span>2</span></div><div class="mini" id="rev"></div>
+    </div>
+    <div>
+      <div class="h"><h2>Routinen</h2><small>8 AKTIV · 6 EINMALIG GEPLANT</small><div class="tabs"><span class="on">Nach Projekt</span><span>Nach Zeit</span><span>Chats</span></div></div>
+      <div id="projects"></div>
+    </div>
+  </div>
+</div>
+<div class="cap"><b>C · Lagebild (warmes Papier)</b>Links „Jetzt“: ein Satz, die wichtigste Karte, darunter aufklappbar der Rest. Rechts die Routinen nach Projekt gruppiert und aufklappbar, jede mit ihren letzten 14 Läufen.</div>
+<script>
+const it = D.blocked[0]
+$('#top', `<div class="card" style="--c:var(--red)"><div class="k">Blockiert · Routine · ${it.proj}<span>heute ${it.when}</span></div><b>${it.title}</b><p>${it.detail}</p><div class="acts"><span class="p">In Claude öffnen</span><span>Gesehen</span><span>Später</span></div></div>`)
+const mini = (items, c) => items.map(x => `<div class="r" style="--c:${c}"><span class="d"></span><b>${x.title}</b><span>${x.when}</span><p>${x.detail}</p></div>`).join('')
+$('#wait', mini(D.waiting, 'var(--amber)')); $('#rev', mini(D.review, 'var(--violet)'))
+const rc = { worked: 'var(--green)', waiting: 'var(--amber)', blocked: 'var(--red)', review: 'var(--violet)' }
+const sq = runs => `<span class="sq">${[...runs].map(r => { const s = RUN[r]; return rc[s] ? `<i style="--c:${rc[s]}"></i>` : `<i class="${s === 'idle' ? 'o' : s === 'missed' ? 'dash' : 'n'}"></i>` }).join('')}</span>`
+const chip = (c, t) => `<span class="chip" style="--c:${c}">${t}</span>`
+const proj = (name, open, chips) => {
+  const rs = D.routines.filter(r => r.proj === name)
+  return `<div class="proj"><div class="ph"><i>${open ? '▼' : '▶'}</i>${name}<span class="cnt">${chips}<span class="chip g">${rs.length} Routinen</span></span></div>` +
+    (open ? rs.map(r => `<div class="rt"><b>${r.name}</b><span class="s">${r.sched}</span>${sq(r.runs)}<span class="nx">${r.next}</span></div>`).join('') : '') + '</div>'
+}
+$('#projects', proj('shop-web', true, chip('var(--red)', '1 blockiert') + chip('var(--violet)', '2 ansehen')) + proj('shop-api', true, chip('var(--amber)', '2 brauchen dich')) + proj('travel-blog', false, chip('var(--amber)', '1 braucht dich')) +
+  '<div class="proj"><div class="ph"><i>▶</i>Einmalige Termine<span class="cnt"><span class="chip g">6 geplant · nächster heute 20:45</span></span></div></div>')
+</script>
+</body></html>

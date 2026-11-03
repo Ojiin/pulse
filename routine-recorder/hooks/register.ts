@@ -1,0 +1,343 @@
+import type { EngineInterface, Register } from 'claude-code'
+
+// Records each run of a scheduled routine into one JSON file per session,
+// ~/.claude/routine-recorder/runs/<sessionId>.json, which the routine
+// dashboard reads. A session becomes a routine run when a scheduled task
+// fires its prompt into it; every later turn of that session (the person
+// continuing in the run's chat) is recorded too, marked by who started it.
+// Every session, a routine run or not, is asked to end its answers with a
+// STATUS line (the Claude app shows HTML comments and markdown references,
+// so it is a plain line).
+
+type $ = EngineInterface
+
+export type RunStatus = 'idle' | 'worked' | 'waiting' | 'blocked' | 'parked'
+export type TurnBy = 'routine' | 'user' | 'system'
+export type Trigger = 'scheduled' | 'manual'
+
+export type Ping = { via: string; detail: string; at: number }
+
+export type Permission = {
+  tool: string
+  toolUseId?: string
+  decision: 'ask' | 'deny'
+  reason?: string
+  rule?: string
+  at: number
+  outcome?: 'allowed' | 'denied' | 'unanswered' | 'error'
+  outcomeText?: string
+}
+
+export type Turn = {
+  id: string
+  by: TurnBy
+  trigger?: Trigger
+  startedAt: number
+  endedAt?: number
+  end?: 'answer' | 'aborted' | 'refusal' | 'error'
+  status?: RunStatus
+  statusText?: string
+  answerTail?: string
+  pings: Ping[]
+  tools: Record<string, number>
+  toolErrors: number
+  lastError?: string
+  permissions: Permission[]
+  interjections: number
+}
+
+export type RunRecord = {
+  version: 1
+  // live: written by this plugin; backfill: rebuilt from an older transcript;
+  // backfill+live: a backfilled run this plugin went on recording
+  source?: 'live' | 'backfill' | 'backfill+live'
+  sessionId: string
+  taskId: string
+  taskFile?: string
+  cwd: string
+  startedAt: number
+  updatedAt: number
+  activeTurnId: string | null
+  turns: Turn[]
+}
+
+const TRIGGER = /^\s*<scheduled-task name="([^"]+)"(?: file="([^"]+)")?/
+// the plain line as asked for, or as a markdown reference ("[//]: # (...)")
+// or an HTML comment, as asked for for a while
+const STATUS_LINE =
+  /^[ \t>*_`]*(?:<!--\s*|\[\/\/\]:\s*#\s*\(\s*)?STATUS:\s*(idle|worked|waiting|blocked|parked)\b\s*[|:–-]?\s*(.*?)\s*(?:-->|\))?[\s*_`]*$/gim
+const PING_LINE = /^[ \t>*_`]*(?:<!--\s*|\[\/\/\]:\s*#\s*\(\s*)?PING:\s*(.+?)\s*(?:-->|\))?[\s*_`]*$/gim
+const PING_TOOL = /^PushNotification$|^mcp__.+__(send|post|notify|reply|chat_post)/i
+const WEBHOOK = /discord(?:app)?\.com\/api\/webhooks|hooks\.slack\.com/i
+const UNANSWERED_TEXT = /went unanswered/i
+const DENIED_TEXT = /doesn't want to proceed|permission.{0,40}denied|was denied|rejected/i
+
+// how much of a round's answer is kept: enough for its closing sentences
+const TAIL = 600
+const MAX_TURNS = 200
+const MAX_PER_TURN = 50
+
+// Every session ends its answers with a STATUS line, which Pulse reads
+// from the transcript (a chat) or from the record (a routine run). worked is a
+// result the person only reads; waiting stays open after they read it
+export function statusPrompt(isRoutine: boolean): string {
+  return [
+    isRoutine
+      ? "This session is a run of one of the user's scheduled routines, and the user's dashboard (Pulse) reads its answers."
+      : "The user's dashboard (Pulse) reads the answers of this session to show them what needs them.",
+    'End every answer you give in this session with an empty line and then one final line in exactly this format:',
+    "STATUS: <idle|worked|waiting|blocked|parked> | <one short sentence in the user's language>",
+    'worked: the task is finished; the user may read the result, but nothing is left for them to answer, decide or do. Once they have read it, it is closed.',
+    'waiting: the user has to answer a question or make a decision, or parts of the task are still open (the sentence says which). Reading the answer does not settle it.',
+    'A finished task whose result reports a problem the user has to act on, or a recommendation they have to approve or choose from, is waiting, not worked: they must not lose it once they have read it. When unsure between the two, it is waiting.',
+    'blocked: you could not do the work (a permission was refused, access or a tool was missing, an error stopped you).',
+    'idle: there was nothing to do.',
+    'parked: the user asked to set this topic aside for later (to park it). Before the STATUS line, sum up in a few lines where it stands and what the next step would be; the sentence says that in short. Only when the user asks for it.',
+    ...(isRoutine
+      ? [
+          'If during this answer you notified anyone outside this chat (push notification, Discord, Slack, email, a message sent through an API), put a line "PING: <who and what>" directly before the STATUS line, after the empty line.',
+        ]
+      : []),
+  ].join('\n')
+}
+
+type State = {
+  loaded?: Promise<RunRecord | null>
+  rec: RunRecord | null
+  file: string
+  saving: Promise<void>
+  pendingBy?: TurnBy
+  pendingTrigger?: Trigger
+}
+
+async function load($: $, s: State): Promise<RunRecord | null> {
+  const home = await $.env.get('HOME')
+  const id = await $.session.id()
+  s.file = `${home}/.claude/routine-recorder/runs/${id}.json`
+  if (!(await $.fs.exists(s.file))) return null
+  const rec = JSON.parse(await $.fs.read(s.file)) as RunRecord
+  if (rec.source === 'backfill') rec.source = 'backfill+live'
+  s.rec = rec
+  return rec
+}
+
+async function ensure($: $, s: State): Promise<RunRecord | null> {
+  s.loaded ??= load($, s).catch(() => null)
+  await s.loaded
+  return s.rec
+}
+
+async function save($: $, s: State): Promise<void> {
+  if (s.rec === null) return
+  s.rec.updatedAt = await $.clock.now()
+  const text = JSON.stringify(s.rec, null, 1)
+  s.saving = s.saving.then(() => $.fs.write(s.file, text)).catch(() => undefined)
+  await s.saving
+}
+
+function current(rec: RunRecord): Turn | undefined {
+  return rec.turns.find(t => t.id === rec.activeTurnId) ?? rec.turns.at(-1)
+}
+
+export const register: Register = on => {
+  const s: State = { rec: null, file: '', saving: Promise.resolve() }
+
+  on('prompt.submit', async ($, e, next) => {
+    try {
+      let rec = await ensure($, s)
+      const trigger = TRIGGER.exec(e.text)
+      const isTrigger = trigger !== null || e.origin.kind === 'scheduled-trigger'
+      if (isTrigger && rec === null) {
+        const now = await $.clock.now()
+        rec = s.rec = {
+          version: 1,
+          source: 'live',
+          sessionId: await $.session.id(),
+          taskId: trigger?.[1] ?? 'unknown',
+          taskFile: trigger?.[2],
+          cwd: await $.session.cwd(),
+          startedAt: now,
+          updatedAt: now,
+          activeTurnId: null,
+          turns: [],
+        }
+      }
+      if (rec !== null) {
+        const by: TurnBy = isTrigger
+          ? 'routine'
+          : ['task-notification', 'peer', 'peer-send-message'].includes(e.origin.kind)
+            ? 'system'
+            : 'user'
+        const running = e.turnId === undefined ? undefined : rec.turns.find(t => t.id === e.turnId)
+        if (running !== undefined) running.interjections++
+        else if (e.text.trimStart().startsWith('<bash-input>')) {
+          // a command the person ran from the chat (the Play button, "!") is a
+          // round of theirs even when nothing answers it: what was refused
+          // before is theirs to have handled
+          const now = await $.clock.now()
+          rec.turns.push({
+            id: `command-${now}`,
+            by: 'user',
+            startedAt: now,
+            endedAt: now,
+            end: 'answer',
+            pings: [],
+            tools: {},
+            toolErrors: 0,
+            permissions: [],
+            interjections: 0,
+          })
+          rec.turns = rec.turns.slice(-MAX_TURNS)
+          s.pendingBy = 'user'
+          s.pendingTrigger = undefined
+        } else {
+          s.pendingBy = by
+          s.pendingTrigger = !isTrigger
+            ? undefined
+            : ['scheduled-trigger', 'task-notification'].includes(e.origin.kind)
+              ? 'scheduled'
+              : 'manual'
+        }
+        await save($, s)
+      }
+    } catch {
+      // the recorder never stands in the way of a prompt
+    }
+    // The model reads the STATUS instruction beside every prompt: the system
+    // prompt is composed before a session is known to be a routine run.
+    return next({ ...e, context: [...(e.context ?? []), statusPrompt(s.rec !== null)] })
+  }).catch(($, e, next) => next(e))
+
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
+    try {
+      const rec = await ensure($, s)
+      if (rec !== null) {
+        rec.turns.push({
+          id: e.turnId,
+          by: s.pendingBy ?? 'system',
+          trigger: s.pendingTrigger,
+          startedAt: await $.clock.now(),
+          pings: [],
+          tools: {},
+          toolErrors: 0,
+          permissions: [],
+          interjections: 0,
+        })
+        rec.turns = rec.turns.slice(-MAX_TURNS)
+        rec.activeTurnId = e.turnId
+        s.pendingBy = undefined
+        s.pendingTrigger = undefined
+        await save($, s)
+      }
+    } catch {
+      // keep the turn going
+    }
+    return next(e)
+  })
+
+  on('tool.check', async ($, e, next) => {
+    const verdict = await next(e)
+    try {
+      const rec = await ensure($, s)
+      const turn = rec === null ? undefined : current(rec)
+      if (turn !== undefined && verdict.decision !== 'allow') {
+        turn.permissions.push({
+          tool: e.tool,
+          toolUseId: e.tool_use_id,
+          decision: verdict.decision,
+          reason: verdict.reason,
+          rule: verdict.rule,
+          at: await $.clock.now(),
+          outcome: verdict.decision === 'deny' ? 'denied' : undefined,
+        })
+        turn.permissions = turn.permissions.slice(-MAX_PER_TURN)
+        await save($, s)
+      }
+    } catch {
+      // the verdict stands as the engine gave it
+    }
+    return verdict
+  }).catch(($, e, next) => next(e))
+
+  on('tool.call', async ($, e, next) => {
+    const rec = await ensure($, s)
+    const turn = rec === null ? undefined : current(rec)
+    if (turn === undefined) return next(e)
+
+    try {
+      turn.tools[e.tool] = (turn.tools[e.tool] ?? 0) + 1
+      const command = e.tool === 'Bash' ? e.command : undefined
+      if (PING_TOOL.test(e.tool) || (command !== undefined && WEBHOOK.test(command))) {
+        turn.pings.push({ via: e.tool, detail: JSON.stringify(e).slice(0, 200), at: await $.clock.now() })
+        turn.pings = turn.pings.slice(-MAX_PER_TURN)
+      }
+    } catch {
+      // count what we can
+    }
+
+    const ran = await next(e)
+
+    try {
+      const asked =
+        e.tool_use_id === undefined ? undefined : turn.permissions.find(p => p.toolUseId === e.tool_use_id)
+      const text = ran.deny ?? (ran.isError === true ? String(ran.text ?? '') : '')
+      const isDenied = ran.deny !== undefined || (ran.isError === true && DENIED_TEXT.test(text))
+      if (ran.isError === true || ran.deny !== undefined) {
+        turn.toolErrors++
+        turn.lastError = `${e.tool}: ${text.slice(0, 200)}`
+      }
+      if (asked !== undefined) {
+        asked.outcome = UNANSWERED_TEXT.test(text)
+          ? 'unanswered'
+          : isDenied
+            ? 'denied'
+            : ran.isError === true
+              ? 'error'
+              : 'allowed'
+        if (text !== '') asked.outcomeText = text.slice(0, 200)
+      } else if (isDenied || UNANSWERED_TEXT.test(text)) {
+        turn.permissions.push({
+          tool: e.tool,
+          toolUseId: e.tool_use_id,
+          decision: isDenied ? 'deny' : 'ask',
+          at: await $.clock.now(),
+          outcome: isDenied ? 'denied' : 'unanswered',
+          outcomeText: text.slice(0, 200),
+        })
+      }
+      await save($, s)
+    } catch {
+      // the tool's result goes back untouched
+    }
+    return ran
+  }).catch(($, e, next) => next(e))
+
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (e.agentId !== undefined) return done
+    try {
+      const rec = await ensure($, s)
+      const turn = rec?.turns.find(t => t.id === e.turnId)
+      if (rec !== null && turn !== undefined) {
+        const endedAt = await $.clock.now()
+        turn.endedAt = endedAt
+        turn.end = e.reason
+        turn.answerTail = done.text.trim().slice(-TAIL) || undefined
+        const last = [...done.text.matchAll(STATUS_LINE)].at(-1)
+        if (last !== undefined) {
+          turn.status = last[1]?.toLowerCase() as RunStatus
+          turn.statusText = last[2]?.trim() || undefined
+        }
+        for (const ping of done.text.matchAll(PING_LINE)) {
+          turn.pings.push({ via: 'PING line', detail: (ping[1] ?? '').slice(0, 200), at: endedAt })
+        }
+        if (rec.activeTurnId === e.turnId) rec.activeTurnId = null
+        await save($, s)
+      }
+    } catch {
+      // the answer stands
+    }
+    return done
+  })
+}

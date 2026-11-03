@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- The menu bar masks of Pulse, black on white: the state symbols in the
+     first row, the digits in the second; make_tray.py turns them into masks. -->
+<script src="../../design/mockups/glyphs.js"></script>
+<style>
+  html, body { margin: 0; background: #fff; --knock: #fff }
+  .c { position: absolute; width: 36px; height: 36px; display: grid; place-items: center; color: #000 }
+  .c svg { width: 30px; height: 30px; display: block }
+  .d { font: 700 26px/36px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center }
+</style></head>
+<body>
+<script>
+const names = ['blocked', 'waiting', 'review', 'commands', 'done']
+document.body.innerHTML = names.map((n, i) => `<div class="c" style="left:${i * 40}px;top:0">${G[n].replace(' class="spin"', '')}</div>`).join('') +
+  [...'0123456789'].map((d, i) => `<div class="c d" style="left:${i * 40}px;top:40px">${d}</div>`).join('')
+</script>
+</body></html>

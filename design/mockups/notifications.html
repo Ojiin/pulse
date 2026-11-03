@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Mitteilungen</title>
+<script src="glyphs.js"></script>
+<style>
+  :root { --red: #e5484d; --amber: #f2a20c; --violet: #8e4ec6; --blue: #3e7bfa; --green: #30a46c; --knock: #fff }
+  * { box-sizing: border-box }
+  .sym { display: inline-block; color: var(--c); flex: none } .sym svg { width: 100%; height: 100%; display: block }
+  .lights { display: grid; gap: 3px } .lights i { width: 8px; height: 8px; border-radius: 50%; background: var(--c) }
+  body { margin: 0; width: 1040px; height: 870px; font: 13px/1.35 -apple-system, BlinkMacSystemFont, sans-serif; color: #1d1d1f; padding: 34px 40px;
+    background: radial-gradient(1200px 700px at 20% 110%, #c9b8a6, transparent), linear-gradient(160deg, #8fa3b8, #d9cbbb 60%, #b8a99a) }
+  h1 { margin: 0 0 4px; font-size: 22px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.35) } .sub { color: #fff; opacity: .95; margin-bottom: 22px; text-shadow: 0 1px 2px rgba(0,0,0,.35) }
+  .item { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: center; margin-bottom: 16px }
+  .why { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4) } .why b { display: block; font-size: 14.5px; margin-bottom: 2px } .why span { font-size: 12.5px; opacity: .95 }
+  .n { width: 380px; background: rgba(246,246,246,.86); backdrop-filter: blur(30px) saturate(1.8); border-radius: 18px; padding: 12px 14px; box-shadow: 0 0 0 .5px rgba(0,0,0,.15), 0 10px 30px rgba(0,0,0,.2);
+    display: grid; grid-template-columns: 38px 1fr auto; gap: 2px 11px }
+  .app { width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(#3a3c42, #222327); display: grid; place-items: center; grid-row: 1 / 4; position: relative }
+  .app .sym { width: 22px; height: 22px; --knock: #2c2d31 } .app .badge { position: absolute; right: -5px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.2) }
+  .app .badge .sym { width: 15px; height: 15px; --knock: #fff }
+  .n b { font-size: 13px } .n .tm { color: #8e8e93; font-size: 12px } .n .ttl { grid-column: 2 / 4; font-weight: 600 }
+  .n p { grid-column: 2 / 4; margin: 0; color: #3a3a3c } .n .acts { grid-column: 2 / 4; display: flex; gap: 6px; margin-top: 7px }
+  .n .acts span { flex: 1; text-align: center; background: rgba(0,0,0,.07); border-radius: 8px; padding: 5px 0; font-size: 12px; font-weight: 500 }
+  .n ul { grid-column: 2 / 4; margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 3px }
+  .n li { display: flex; gap: 6px; align-items: center; color: #3a3a3c } .n li .sym { width: 14px; height: 14px }
+  .ladder { display: flex; gap: 6px; margin-top: 8px } .ladder span { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,.3); color: #fff } .ladder span.on { background: #fff; color: #1d1d1f; font-weight: 600 }
+</style></head>
+<body>
+<h1>Mitteilungen</h1>
+<div class="sub">Radar meldet sich über die normalen macOS-Mitteilungen, mit Knöpfen direkt in der Mitteilung. Jede Art lässt sich einzeln abschalten.</div>
+<div id="list"></div>
+<script>
+const app = s => `<span class="app"><span class="lights"><i style="--c:#e5484d"></i><i style="--c:#f2a20c"></i><i style="--c:#8e4ec6"></i></span><span class="badge">${sym(s, 15)}</span></span>`
+const n = (s, title, text, acts, tm = 'jetzt') => `<div class="n">${app(s)}<b>Radar</b><span class="tm">${tm}</span><span class="ttl">${title}</span><p>${text}</p>${acts ? `<div class="acts">${acts.map(a => `<span>${a}</span>`).join('')}</div>` : ''}</div>`
+const items = [
+  ['Neu blockiert', 'sofort, sobald etwas nicht weiterkommt', n('blocked', 'Blockiert: Täglicher Backup-Check', 'shop-web · Die Freigabe für den Restore-Test wurde abgelehnt, drei Bereiche haben kein Ergebnis.', ['In Claude öffnen', 'Gesehen'])],
+  ['Neue Rückfrage', 'sofort, wenn ein Vorgang auf dich wartet', n('waiting', 'Rückfrage: Preis-Watch', 'shop-api · Soll ein neuer Anbieter in die Preisliste aufgenommen werden?', ['In Claude öffnen', 'Gesehen'])],
+  ['Erinnerung nach Alter', 'nach 2 h, 4 h, 12 h, 24 h, danach täglich, je Vorgang', n('review', 'Liegt seit 4 h: Link-Check morgens', 'shop-web · Ergebnis noch nicht angesehen: 24 Links geprüft, 2 kaputt.', ['Öffnen', 'Gesehen', 'Erledigt'], 'vor 1 min') + '<div class="ladder"><span>2 h</span><span class="on">4 h</span><span>12 h</span><span>24 h</span><span>alle 24 h</span></div>'],
+  ['Zusammenfassung am Morgen', 'um 8:00, oder beim ersten Aufklappen danach', `<div class="n">${app('done')}<b>Radar</b><span class="tm">08:00</span><span class="ttl">Guten Morgen: 6 Punkte offen</span>
+    <ul><li>${sym('blocked', 14)}1 blockiert: Täglicher Backup-Check</li><li>${sym('waiting', 14)}3 Rückfragen, älteste seit 5 Tagen</li><li>${sym('review', 14)}2 Ergebnisse zum Ansehen</li><li>${sym('planned', 14)}Heute geplant: 14 Läufe, 1 einmalige Prüfung</li></ul>
+    <div class="acts"><span>Radar öffnen</span></div></div>`],
+]
+document.querySelector('#list').innerHTML = items.map(([b, s, html]) => `<div class="item"><div class="why"><b>${b}</b><span>${s}</span></div><div>${html}</div></div>`).join('')
+</script>
+</body></html>

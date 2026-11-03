@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Icons v2</title>
+<style>
+  :root { --red: #e5484d; --amber: #f5a524; --violet: #8e4ec6; --blue: #3e7bfa; --green: #30a46c; --calm: #8e8e93 }
+  body { margin: 0; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f1ee; color: #1d1d1f; padding: 34px 40px; width: 1160px }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px } .sub { color: #6e6e73; margin-bottom: 24px; max-width: 1060px }
+  .grid { display: grid; grid-template-columns: 170px repeat(5, 1fr); gap: 10px 12px; align-items: center }
+  .head { text-align: center; font-weight: 650; font-size: 13px } .head small { display: block; font-weight: 400; color: #8a8a8e; font-size: 11.5px }
+  .head i { display: block; width: 26px; height: 4px; border-radius: 2px; margin: 0 auto 6px; background: var(--c) }
+  .variant { font-weight: 650; font-size: 14px } .variant small { display: block; font-weight: 400; color: #6e6e73; font-size: 12px; margin-top: 2px }
+  .rec { display: inline-block; background: #1d1d1f; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; margin-top: 6px }
+  .cell { background: #fff; border-radius: 12px; padding: 12px 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); display: grid; gap: 8px; justify-items: center }
+  .bar { width: 100%; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; gap: 11px; padding: 0 10px; box-sizing: border-box; font-size: 13px; font-weight: 500 }
+  .light { background: linear-gradient(#f6f6f6, #ececec); color: #1d1d1f; --calm: #3a3a3c } .dark { background: linear-gradient(#2c2c2e, #232325); color: #f5f5f7; --calm: #e5e5ea }
+  .ghost { opacity: .5; width: 15px; height: 15px }
+  .ico { display: inline-flex; align-items: center; gap: 4px; color: var(--c) } .ico svg { width: 17px; height: 17px } .num { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums }
+  .big { display: flex; gap: 14px; align-items: center; color: var(--c); --calm: #3a3a3c } .big svg { width: 46px; height: 46px }
+  .frames { display: flex; gap: 6px; align-items: center; color: var(--c); font-size: 10.5px; color: #8a8a8e } .frames svg { width: 22px; height: 22px; color: var(--c) }
+  .multi { grid-column: 2 / 7; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px }
+  .multi .cell { justify-items: stretch } .multi .lbl { font-size: 12px; color: #555; text-align: center }
+  .chip { display: inline-flex; align-items: center; gap: 2px; color: var(--c) } .chip svg { width: 15px; height: 15px } .chip b { font-size: 12px; font-weight: 650 }
+  .note { margin-top: 20px; color: #444; font-size: 12.5px; max-width: 1080px; line-height: 1.55 }
+  @keyframes spin { to { transform: rotate(360deg) } } @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+</style></head>
+<body>
+<h1>Menüleisten-Icon v2: ein Symbol pro Zustand, in Farbe</h1>
+<div class="sub">B und C kombiniert: Form und Farbe wechseln gemeinsam, so dass jeder Zustand auch ohne Farbe (und ohne Farbe sehen zu können) eindeutig ist. Kein Radar mehr. Läuft dreht sich, Blockiert pulsiert. Die Zahl zählt, was dich braucht.</div>
+<div class="grid" id="grid"></div>
+<div class="note" id="note"></div>
+<script>
+const S = {
+  calm: { label: 'Alles ruhig', hint: 'nichts offen, nichts läuft', c: 'var(--calm)',
+    fill: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.6" fill="currentColor"/><path d="M5.4 9.3l2.4 2.4 4.8-5" fill="none" stroke="var(--knock)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    line: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.6 9.3l2.3 2.3 4.6-4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+  running: { label: 'Läuft', hint: 'arbeitet, dreht sich', c: 'var(--blue)', anim: 'spin',
+    fill: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.6" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="2.6"/><path d="M9 2.4a6.6 6.6 0 016.6 6.6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="9" cy="9" r="2" fill="currentColor"/></svg>`,
+    line: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="1.5"/><path d="M9 2a7 7 0 017 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/></svg>` },
+  review: { label: 'Zum Ansehen', hint: 'fertig, bitte prüfen', c: 'var(--violet)',
+    fill: `<svg viewBox="0 0 18 18"><path d="M1 9c2-3.8 4.8-5.6 8-5.6S15 5.2 17 9c-2 3.8-4.8 5.6-8 5.6S3 12.8 1 9z" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="var(--knock)"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>`,
+    line: `<svg viewBox="0 0 18 18"><path d="M1.5 9c1.9-3.5 4.5-5.2 7.5-5.2s5.6 1.7 7.5 5.2c-1.9 3.5-4.5 5.2-7.5 5.2S3.4 12.5 1.5 9z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="9" cy="9" r="2.4" fill="currentColor"/></svg>` },
+  waiting: { label: 'Braucht dich', hint: 'Rückmeldung, Freigabe', c: 'var(--amber)',
+    fill: `<svg viewBox="0 0 18 18"><path d="M3 2.5h12A2 2 0 0117 4.5v7.2a2 2 0 01-2 2H8.4L4.6 16.6v-2.9H3a2 2 0 01-2-2V4.5a2 2 0 012-2z" fill="currentColor"/><path d="M7.2 6.3a1.9 1.9 0 113 1.5c-.6.4-1.2.8-1.2 1.6" fill="none" stroke="var(--knock)" stroke-width="1.6" stroke-linecap="round"/><circle cx="9" cy="11.3" r=".95" fill="var(--knock)"/></svg>`,
+    line: `<svg viewBox="0 0 18 18"><path d="M3 2.8h12a1.8 1.8 0 011.8 1.8v7a1.8 1.8 0 01-1.8 1.8H8.3l-3.6 2.7v-2.7H3a1.8 1.8 0 01-1.8-1.8v-7A1.8 1.8 0 013 2.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.3 6.4a1.8 1.8 0 112.8 1.4c-.6.4-1.1.8-1.1 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="11.1" r=".9" fill="currentColor"/></svg>` },
+  blocked: { label: 'Blockiert', hint: 'kommt nicht weiter, pulsiert', c: 'var(--red)', anim: 'pulse',
+    fill: `<svg viewBox="0 0 18 18"><path d="M6 1h6l5 5v6l-5 5H6l-5-5V6z" fill="currentColor"/><path d="M9 4.8v5" stroke="var(--knock)" stroke-width="2.1" stroke-linecap="round"/><circle cx="9" cy="12.9" r="1.2" fill="var(--knock)"/></svg>`,
+    line: `<svg viewBox="0 0 18 18"><path d="M6.2 1.7h5.6l4.5 4.5v5.6l-4.5 4.5H6.2l-4.5-4.5V6.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 5.2v4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="12.6" r="1.1" fill="currentColor"/></svg>` },
+}
+const order = ['calm', 'running', 'review', 'waiting', 'blocked']
+const count = { calm: '', running: '', review: '2', waiting: '5', blocked: '6' }
+const wifi = `<svg class="ghost" viewBox="0 0 16 16"><path d="M8 13.2l1.6-1.9a2.2 2.2 0 00-3.2 0L8 13.2zM3.6 8.4l1.2 1.4a4.6 4.6 0 016.4 0l1.2-1.4a6.4 6.4 0 00-8.8 0zM1.2 5.6l1.2 1.4a8.3 8.3 0 0111.2 0l1.2-1.4a10.2 10.2 0 00-13.6 0z" fill="currentColor"/></svg>`
+const batt = `<svg class="ghost" style="width:22px" viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="14" height="8" rx="1.5" fill="currentColor"/></svg>`
+const knock = bar => bar === 'light' ? '#ececec' : bar === 'dark' ? '#262628' : '#fff'
+const ico = (id, kind, bar) => `<span class="ico" style="--c:${S[id].c};--knock:${knock(bar)}">${S[id][kind]}${count[id] ? `<span class="num">${count[id]}</span>` : ''}</span>`
+const frames = (id, kind) => {
+  if (S[id].anim === 'spin') return `<div class="frames" style="--c:${S[id].c};--knock:#fff">${[0, 90, 180, 270].map(d => `<span style="display:inline-block;transform:rotate(${d}deg)">${S[id][kind]}</span>`).join('')}<span>dreht sich</span></div>`
+  if (S[id].anim === 'pulse') return `<div class="frames" style="--c:${S[id].c};--knock:#fff">${[1, .6, .25, .6].map(o => `<span style="opacity:${o}">${S[id][kind]}</span>`).join('')}<span>pulsiert</span></div>`
+  return '<div class="frames">steht</div>'
+}
+let html = '<div></div>' + order.map(id => `<div class="head" style="--c:${S[id].c === 'var(--calm)' ? '#a1a1a6' : S[id].c}"><i></i>${S[id].label}<small>${S[id].hint}</small></div>`).join('')
+for (const [kind, name, desc, rec] of [['fill', 'Gefüllt', 'kräftig, auch klein gut erkennbar', true], ['line', 'Kontur', 'leichter, näher an den Systemsymbolen', false]]) {
+  html += `<div class="variant">${name}<small>${desc}</small>${rec ? '<span class="rec">Empfehlung</span>' : ''}</div>`
+  for (const id of order) html += `<div class="cell"><div class="bar light">${ico(id, kind, 'light')}${wifi}${batt}<span>15:42</span></div><div class="bar dark">${ico(id, kind, 'dark')}${wifi}${batt}<span>15:42</span></div><div class="big" style="--c:${S[id].c};--knock:#fff">${S[id][kind]}</div>${frames(id, kind)}</div>`
+}
+const chip = (id, n, bar) => `<span class="chip" style="--c:${S[id].c};--knock:${knock(bar)}">${S[id].fill}${n ? `<b>${n}</b>` : ''}</span>`
+const combos = [
+  [[['blocked', 1], ['waiting', 3], ['review', 2]], 'blockiert + braucht dich + zum Ansehen'],
+  [[['waiting', 3], ['running', '']], 'braucht dich, eine Session läuft'],
+  [[['review', 2], ['running', '']], 'fertig zum Ansehen, eine läuft'],
+]
+html += `<div class="variant">Mehrere zugleich<small>statt nur des dringendsten: jeder offene Zustand als eigenes kleines Symbol mit Zahl</small></div><div class="multi">` +
+  combos.map(([parts, lbl]) => `<div class="cell"><div class="bar light">${parts.map(([id, n]) => chip(id, n, 'light')).join('')}${wifi}<span>15:42</span></div><div class="bar dark">${parts.map(([id, n]) => chip(id, n, 'dark')).join('')}${wifi}<span>15:42</span></div><div class="lbl">${lbl}</div></div>`).join('') + '</div>'
+document.querySelector('#grid').innerHTML = html
+document.querySelector('#note').innerHTML = '<b>Einzeln oder mehrere:</b> Einzeln zeigt die Leiste nur den dringendsten Zustand (blockiert vor braucht dich vor zum Ansehen vor läuft), mit der Zahl aller offenen Punkte. „Mehrere zugleich“ zeigt jeden offenen Zustand nebeneinander, ist dafür breiter. „Alles ruhig“ ist ein grauer Haken, „Läuft“ ein blauer, sich drehender Ring: die beiden sind nicht mehr zu verwechseln.'
+</script>
+</body></html>

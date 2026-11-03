@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Icons</title>
+<script src="data.js"></script>
+<style>
+  body { margin: 0; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f1ee; color: #1d1d1f; padding: 36px 40px; width: 1120px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: -.01em }
+  .sub { color: #6e6e73; margin-bottom: 28px }
+  .grid { display: grid; grid-template-columns: 180px repeat(5, 1fr); gap: 10px 12px; align-items: center }
+  .head { font-weight: 600; font-size: 12px; color: #444; text-align: center }
+  .head small { display: block; font-weight: 400; color: #8a8a8e }
+  .variant { font-weight: 650; font-size: 14px }
+  .variant small { display: block; font-weight: 400; color: #6e6e73; font-size: 12px; margin-top: 2px }
+  .rec { display: inline-block; background: #1d1d1f; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 2px }
+  .cell { background: #fff; border-radius: 12px; padding: 12px 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); display: grid; gap: 8px; justify-items: center }
+  .bar { width: 100%; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 10px; box-sizing: border-box; font-size: 13px; font-weight: 500 }
+  .bar.light { background: linear-gradient(#f6f6f6, #ececec); color: #1d1d1f }
+  .bar.dark { background: linear-gradient(#2c2c2e, #232325); color: #f5f5f7 }
+  .ghost { opacity: .55; width: 15px; height: 15px }
+  .ico { display: inline-flex; align-items: center; gap: 4px; height: 18px }
+  .glyph { width: 17px; height: 17px; position: relative; display: inline-block }
+  .dot { position: absolute; right: -2px; top: -2px; width: 7.5px; height: 7.5px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--ring) }
+  .light { --ring: #f1f1f1 } .dark { --ring: #262628 }
+  .num { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums }
+  .big { width: 44px; height: 44px; position: relative; color: #1d1d1f }
+  .big .dot { width: 16px; height: 16px; right: -4px; top: -4px; --ring: #fff; box-shadow: 0 0 0 3px #fff }
+  .legend { margin-top: 26px; display: flex; gap: 22px; color: #444; font-size: 12.5px }
+  .legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: -1px }
+  .note { margin-top: 18px; color: #555; font-size: 12.5px; max-width: 980px }
+</style></head>
+<body>
+<h1>Menüleisten-Icon: drei Varianten</h1>
+<div class="sub">Jede Spalte ein Zustand, in heller und dunkler Menüleiste und vergrößert. Der dringendste Zustand gewinnt: blockiert vor „braucht dich“ vor „zum Ansehen“ vor „läuft“.</div>
+<div class="grid" id="grid"></div>
+<div class="legend">
+  <span style="--c:#e5484d">Blockiert</span><span style="--c:#f5a524">Braucht dich (Rückmeldung, Freigabe)</span><span style="--c:#8e4ec6">Zum Ansehen (fertig, bitte prüfen)</span><span style="--c:#3e7bfa">Läuft</span><span style="--c:#a1a1a6">Alles ruhig</span>
+</div>
+<div class="note">Die Zahl neben dem Icon zählt nur, was dich braucht (blockiert + Rückmeldung + zum Ansehen). „Läuft“ ist kein Auftrag an dich: nur der Radar-Kegel, keine Zahl.</div>
+<script>
+const C = { blocked: '#e5484d', waiting: '#f5a524', review: '#8e4ec6', running: '#3e7bfa' }
+const states = [
+  { id: 'ok', label: 'Alles ruhig', hint: 'nichts offen' },
+  { id: 'running', label: 'Läuft', hint: '1 Session arbeitet' },
+  { id: 'review', label: 'Zum Ansehen', hint: '2 fertig' },
+  { id: 'waiting', label: 'Braucht dich', hint: '3 Rückmeldungen' },
+  { id: 'blocked', label: 'Blockiert', hint: '1 blockiert, 5 offen' },
+]
+const count = { ok: '', running: '', review: '2', waiting: '5', blocked: '6' }
+const wifi = `<svg class="ghost" viewBox="0 0 16 16"><path d="M8 13.2l1.6-1.9a2.2 2.2 0 00-3.2 0L8 13.2zM3.6 8.4l1.2 1.4a4.6 4.6 0 016.4 0l1.2-1.4a6.4 6.4 0 00-8.8 0zM1.2 5.6l1.2 1.4a8.3 8.3 0 0111.2 0l1.2-1.4a10.2 10.2 0 00-13.6 0z" fill="currentColor"/></svg>`
+const batt = `<svg class="ghost" style="width:22px" viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="14" height="8" rx="1.5" fill="currentColor"/><rect x="21.5" y="4" width="1.6" height="4" rx=".8" fill="currentColor"/></svg>`
+
+function v1(s, big) { // dot + number
+  const glyph = s === 'running' ? RADAR_SWEEP : RADAR
+  const dot = C[s] && s !== 'running' ? `<i class="dot" style="background:${C[s]}"></i>` : ''
+  if (big) return `<div class="big">${glyph}${dot}</div>`
+  return `<span class="ico"><span class="glyph">${glyph}${dot}</span>${count[s] ? `<span class="num">${count[s]}</span>` : ''}</span>`
+}
+function v2(s, big) { // form only, monochrome
+  const glyphs = {
+    ok: RADAR, running: RADAR_SWEEP,
+    review: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.3" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="9" r="4.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12.6" cy="5.2" r="2.6" fill="currentColor"/></svg>`,
+    waiting: `<svg viewBox="0 0 18 18"><path d="M3 3.5h12a1.5 1.5 0 011.5 1.5v7a1.5 1.5 0 01-1.5 1.5H8l-3.6 2.8V13.5H3A1.5 1.5 0 011.5 12V5A1.5 1.5 0 013 3.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="6" cy="8.5" r="1.1" fill="currentColor"/><circle cx="9" cy="8.5" r="1.1" fill="currentColor"/><circle cx="12" cy="8.5" r="1.1" fill="currentColor"/></svg>`,
+    blocked: `<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 4.6v5.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="13" r="1.25" fill="currentColor"/></svg>`,
+  }
+  if (big) return `<div class="big">${glyphs[s]}</div>`
+  return `<span class="ico"><span class="glyph">${glyphs[s]}</span>${count[s] ? `<span class="num">${count[s]}</span>` : ''}</span>`
+}
+function v3(s, big) { // the whole glyph in colour
+  const glyph = s === 'running' ? RADAR_SWEEP : RADAR
+  const col = s === 'ok' ? '' : `color:${C[s]}`
+  if (big) return `<div class="big" style="${col}">${glyph}</div>`
+  return `<span class="ico" style="${col}"><span class="glyph">${glyph}</span>${count[s] ? `<span class="num">${count[s]}</span>` : ''}</span>`
+}
+const variants = [
+  [v1, 'A · Punkt + Zahl', 'Icon bleibt schwarz/weiß wie alle anderen, ein farbiger Punkt sagt den Zustand', true],
+  [v2, 'B · Form', 'nur schwarz/weiß, die Form wechselt; ganz im Stil von macOS', false],
+  [v3, 'C · Ganz in Farbe', 'das ganze Icon färbt sich; am auffälligsten', false],
+]
+let html = '<div></div>' + states.map(s => `<div class="head">${s.label}<small>${s.hint}</small></div>`).join('')
+for (const [fn, name, desc, rec] of variants) {
+  html += `<div class="variant">${name}${rec ? '<span class="rec">Empfehlung</span>' : ''}<small>${desc}</small></div>`
+  for (const s of states) {
+    html += `<div class="cell"><div class="bar light">${fn(s.id)}${wifi}${batt}<span>15:42</span></div><div class="bar dark">${fn(s.id)}${wifi}${batt}<span>15:42</span></div>${fn(s.id, true)}</div>`
+  }
+}
+$('#grid', html)
+</script>
+</body></html>

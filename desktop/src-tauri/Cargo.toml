@@ -1,0 +1,26 @@
+[package]
+name = "pulse"
+version = "0.2.0"
+description = "Pulse: what the Claude app's sessions and routines do, and what of it needs you"
+edition = "2021"
+rust-version = "1.80"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+notify = "8"
+rusty-leveldb = "3"
+png = "0.17"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

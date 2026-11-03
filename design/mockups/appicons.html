@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>App-Icons</title>
+<style>
+  body { margin: 0; width: 1240px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f1ee; color: #1d1d1f; padding: 34px 40px; box-sizing: border-box }
+  h1 { font-size: 22px; margin: 0 0 4px } .sub { color: #6e6e73; margin-bottom: 24px }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px }
+  .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.06) }
+  .card h2 { margin: 0; font-size: 15px } .card p { margin: 3px 0 14px; color: #6e6e73; font-size: 12.5px; min-height: 36px }
+  .big { display: flex; justify-content: center; padding: 6px 0 14px } .big svg { width: 210px; height: 210px; filter: drop-shadow(0 10px 18px rgba(0,0,0,.18)) }
+  .small { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+  .dock { border-radius: 12px; padding: 8px; display: flex; gap: 10px; align-items: center; justify-content: center }
+  .dock.l { background: rgba(230,230,232,.9) } .dock.d { background: #2a2a2d }
+  .dock svg { width: 50px; height: 50px } .dock i { width: 42px; height: 42px; border-radius: 10px; opacity: .25; background: currentColor } .dock.l i { color: #888 } .dock.d i { color: #aaa }
+  .noti { grid-column: 1 / 3; display: flex; gap: 10px; align-items: center; background: #eeeeef; border-radius: 12px; padding: 8px 10px; font-size: 12px }
+  .noti svg { width: 34px; height: 34px; flex: none } .noti b { display: block } .noti span { color: #555 }
+  .spot { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #444 } .spot svg { width: 20px; height: 20px }
+  .rec { display: inline-block; background: #1d1d1f; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 2px }
+</style></head>
+<body>
+<h1>App-Icon: sechs Richtungen</h1>
+<div class="sub">Jede groß, im Dock (hell und dunkel), in einer Mitteilung und so klein wie in Spotlight. Das Icon im Dock zeigt nicht den Zustand; das macht das Symbol in der Menüleiste.</div>
+<div class="grid" id="grid"></div>
+<script>
+const sq = 'M512 40c260 0 330 0 401 71s71 141 71 401 0 330-71 401-141 71-401 71-330 0-401-71S40 772 40 512s0-330 71-401S252 40 512 40z'
+const icons = [
+  ['Statusraster', 'Viele Vorgänge auf einen Blick, einzelne leuchten in den Zustandsfarben. Steht direkt für das, was Radar tut.', true, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3d45"/><stop offset="1" stop-color="#1c1d22"/></linearGradient>
+    <filter id="${id}f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter></defs>
+    <path d="${sq}" fill="url(#${id}g)"/>
+    ${[[0,0,'#4a4d56'],[1,0,'#e5484d',1],[2,0,'#4a4d56'],[0,1,'#f2a20c',1],[1,1,'#4a4d56'],[2,1,'#4a4d56'],[0,2,'#4a4d56'],[1,2,'#3e7bfa',1],[2,2,'#8e4ec6',1]].map(([x,y,c,lit]) => {
+      const X = 212 + x * 220, Y = 212 + y * 220
+      return (lit ? `<rect x="${X}" y="${Y}" width="160" height="160" rx="44" fill="${c}" filter="url(#${id}f)" opacity=".7"/>` : '') + `<rect x="${X}" y="${Y}" width="160" height="160" rx="44" fill="${c}"/>`
+    }).join('')}`],
+  ['Puls', 'Eine Herzschlag-Linie, die in einem leuchtenden Punkt endet: es lebt, etwas läuft, etwas meldet sich.', false, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#26324a"/><stop offset="1" stop-color="#121722"/></linearGradient>
+    <filter id="${id}f" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="26"/></filter></defs>
+    <path d="${sq}" fill="url(#${id}g)"/>
+    <path d="M150 560h170l60-150 90 300 80-380 70 230h110" fill="none" stroke="#e9eef8" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="790" cy="560" r="70" fill="#f2a20c" filter="url(#${id}f)"/><circle cx="790" cy="560" r="58" fill="#f2a20c"/>`],
+  ['Stapel', 'Gestapelte Karten, die oberste mit Markierung: nichts geht verloren, das Wichtigste liegt oben.', false, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbf9f4"/><stop offset="1" stop-color="#e6e0d3"/></linearGradient></defs>
+    <path d="${sq}" fill="url(#${id}g)"/>
+    <rect x="270" y="230" width="484" height="300" rx="56" fill="#d8d1c2"/>
+    <rect x="230" y="320" width="564" height="330" rx="60" fill="#ebe6db" stroke="#cfc7b6" stroke-width="6"/>
+    <rect x="190" y="420" width="644" height="380" rx="66" fill="#fff" stroke="#d2cabb" stroke-width="6"/>
+    <circle cx="300" cy="530" r="44" fill="#e5484d"/>
+    <rect x="380" y="500" width="330" height="56" rx="28" fill="#3a3a3c"/>
+    <rect x="270" y="620" width="480" height="40" rx="20" fill="#c9c3b6"/><rect x="270" y="690" width="340" height="40" rx="20" fill="#dcd7cc"/>`],
+  ['Leuchtfeuer', 'Ein Signallicht mit Strahlen: es ruft dich, wenn etwas dich braucht.', false, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f3c78"/><stop offset="1" stop-color="#0f1a35"/></linearGradient>
+    <radialGradient id="${id}r" cx=".5" cy=".42" r=".5"><stop offset="0" stop-color="#ffd27a" stop-opacity=".55"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient></defs>
+    <path d="${sq}" fill="url(#${id}g)"/><circle cx="512" cy="430" r="380" fill="url(#${id}r)"/>
+    ${[-62,-31,0,31,62].map(a => `<path d="M512 400 L${512 + 330 * Math.sin(a * Math.PI / 180) - 26} ${400 - 330 * Math.cos(a * Math.PI / 180)} L${512 + 330 * Math.sin(a * Math.PI / 180) + 26} ${400 - 330 * Math.cos(a * Math.PI / 180)}Z" fill="#ffd27a" opacity=".35"/>`).join('')}
+    <path d="M392 470a120 120 0 01240 0v150H392z" fill="#ffc24a"/><rect x="352" y="620" width="320" height="70" rx="22" fill="#e9eef8"/><rect x="392" y="700" width="240" height="110" rx="24" fill="#c6d0e4"/>`],
+  ['Ping', 'Ein einzelner Punkt mit Wellen, die sich ausbreiten: ruhiger als ein Radar, ohne Kegel und Ringe.', false, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b3a9c"/><stop offset="1" stop-color="#2a1a52"/></linearGradient></defs>
+    <path d="${sq}" fill="url(#${id}g)"/>
+    <circle cx="512" cy="512" r="330" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="40"/>
+    <circle cx="512" cy="512" r="220" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="44"/>
+    <circle cx="512" cy="512" r="110" fill="#fff"/>`],
+  ['Haken im Blick', 'Ein Haken in einem offenen Kreis mit einem Punkt: der Kreis schließt sich, wenn alles erledigt ist.', false, id => `
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f9e62"/><stop offset="1" stop-color="#17643c"/></linearGradient></defs>
+    <path d="${sq}" fill="url(#${id}g)"/>
+    <path d="M720 290A300 300 0 10812 512" fill="none" stroke="#fff" stroke-width="64" stroke-linecap="round"/>
+    <path d="M380 520l100 100 190-210" fill="none" stroke="#fff" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="790" cy="300" r="56" fill="#f2a20c"/>`],
+]
+document.querySelector('#grid').innerHTML = icons.map(([name, desc, rec, svg], i) => {
+  const s = (sz, k) => `<svg viewBox="0 0 1024 1024">${svg('i' + i + k)}</svg>`
+  return `<div class="card"><h2>${i + 1} · ${name}${rec ? '<span class="rec">Empfehlung</span>' : ''}</h2><p>${desc}</p><div class="big">${s(210, 'a')}</div>
+  <div class="small"><div class="dock l"><i></i>${s(50, 'b')}<i></i></div><div class="dock d"><i></i>${s(50, 'c')}<i></i></div>
+  <div class="noti">${s(34, 'd')}<div><b>Radar</b><span>Blockiert: Täglicher Backup-Check</span></div></div>
+  <div class="spot">${s(20, 'e')}Radar — Programm</div></div></div>`
+}).join('')
+</script>
+</body></html>

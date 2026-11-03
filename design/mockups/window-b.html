@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Fenster B</title>
+<script src="data.js"></script>
+<style>
+  :root { --red: #ff5f57; --amber: #ffb224; --violet: #b58cff; --blue: #5b9bff; --green: #46c37b; --orange: #ff8a3d }
+  body { margin: 0; width: 1440px; height: 940px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #ececee; background: radial-gradient(900px 600px at 70% 0%, #2b3a55, transparent), #0d0f14; overflow: hidden }
+  .win { position: absolute; inset: 20px 20px 70px; background: #17181c; border-radius: 12px; box-shadow: 0 0 0 .5px rgba(255,255,255,.15), 0 25px 70px rgba(0,0,0,.6); overflow: hidden; display: flex; flex-direction: column }
+  .top { display: flex; align-items: center; gap: 16px; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,.06) }
+  .lights { display: flex; gap: 8px } .lights i { width: 12px; height: 12px; border-radius: 50% }
+  .title { font-weight: 650; font-size: 14px; display: flex; gap: 8px; align-items: center }
+  .title .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(255,95,87,.2) }
+  .title span { color: #8b8d94; font-weight: 400 }
+  .search { margin-left: auto; background: rgba(255,255,255,.06); border-radius: 7px; padding: 6px 12px; color: #7d8088; width: 260px; font-size: 12.5px }
+  .mono { font: 11.5px ui-monospace, SFMono-Regular, monospace; color: #8b8d94 }
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 18px 6px; flex: 1; min-height: 0 }
+  .colm { background: rgba(255,255,255,.025); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid var(--c) }
+  .ch { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 4px }
+  .ch b { font: 600 22px ui-monospace, SFMono-Regular, monospace; color: var(--c) } .ch span { color: #c7c8cc; font-weight: 600 } .ch em { margin-left: auto; font-style: normal; color: #6d7078; font-size: 11.5px }
+  .card { background: #202227; border-radius: 10px; padding: 11px 12px; border: 1px solid rgba(255,255,255,.05) }
+  .card.sel { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent) }
+  .card .k { display: flex; justify-content: space-between; font: 10.5px ui-monospace, monospace; color: #7d8088; text-transform: uppercase; letter-spacing: .05em }
+  .card b { display: block; font-size: 13.5px; margin: 4px 0 3px; color: #f2f2f4 }
+  .card p { margin: 0; color: #a7a9b0; font-size: 12px }
+  .card .acts { display: flex; gap: 6px; margin-top: 9px } .card .acts span { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.08) } .card .acts span.p { background: var(--c); color: #16171a; font-weight: 600 }
+  .card .prog { height: 3px; background: rgba(255,255,255,.08); border-radius: 2px; margin-top: 9px; overflow: hidden } .card .prog i { display: block; width: 40%; height: 100%; background: var(--blue) }
+  .empty { color: #5d6068; font-size: 12px; text-align: center; padding: 14px; border: 1px dashed rgba(255,255,255,.08); border-radius: 10px }
+  .today { border-top: 1px solid rgba(255,255,255,.06); padding: 10px 18px 16px }
+  .th { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; color: #c7c8cc; font-weight: 600 } .th i { font-style: normal; color: #6d7078; font-size: 10px } .th span { color: #6d7078; font-weight: 400 }
+  .lane { display: grid; grid-template-columns: 220px 1fr 110px; align-items: center; height: 26px; gap: 12px }
+  .lane .n { color: #c7c8cc; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .track { position: relative; height: 26px; border-bottom: 1px solid rgba(255,255,255,.04) }
+  .track i { position: absolute; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--c); transform: translateX(-5px) }
+  .track i.o { background: #17181c; box-shadow: inset 0 0 0 1.5px #5d6068 } .track i.f { background: none; box-shadow: inset 0 0 0 1.5px #5b9bff; border-radius: 50% }
+  .now { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--red) }
+  .hours { position: relative; height: 16px; margin-left: 232px; margin-right: 122px } .hours span { position: absolute; font: 10.5px ui-monospace, monospace; color: #5d6068; transform: translateX(-50%) }
+  .lane .nx { font: 11px ui-monospace, monospace; color: #7d8088; text-align: right }
+  .cap { position: absolute; left: 24px; bottom: 16px; color: #c9cbd1; font-size: 13px } .cap b { font-size: 16px; margin-right: 10px; color: #fff }
+</style></head>
+<body>
+<div class="win">
+  <div class="top"><div class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+    <div class="title"><span class="pulse"></span>Radar <span>· 1 blockiert, 5 brauchen dich</span></div>
+    <div class="search">⌘K Suchen oder springen …</div><span class="mono">15:42:08</span></div>
+  <div class="board" id="board"></div>
+  <div class="today">
+    <div class="th"><i>▼</i>Heute<span>8 Routinen · 14 Läufe · nächster 16:05</span></div>
+    <div class="hours" id="hours"></div>
+    <div id="lanes"></div>
+  </div>
+</div>
+<div class="cap"><b>B · Kontrollraum (dunkel)</b>Oben ein Board mit vier Spalten nach Zustand, Karten mit Direktaktionen. Unten aufklappbar der Tag als Zeitstrahl: jeder Lauf ein Punkt, rote Linie = jetzt.</div>
+<script>
+const cols = [['blocked', 'Blockiert', 'var(--red)', D.blocked], ['waiting', 'Braucht dich', 'var(--amber)', D.waiting], ['review', 'Zum Ansehen', 'var(--violet)', D.review], ['running', 'Läuft', 'var(--blue)', D.running]]
+$('#board', cols.map(([id, title, c, items]) => `<div class="colm" style="--c:${c}"><div class="ch"><b>${items.length}</b><span>${title}</span><em>${id === 'running' ? 'live' : 'älteste zuerst'}</em></div>` +
+  items.map((it, i) => `<div class="card ${id === 'blocked' ? 'sel' : ''}" style="--c:${c}"><div class="k"><span>${it.proj}</span><span>${it.when}</span></div><b>${it.title}</b><p>${it.detail}</p>` +
+    (id === 'blocked' ? '<div class="acts"><span class="p">In Claude öffnen</span><span>Gesehen</span><span>Später</span></div>' : id === 'review' ? '<div class="acts"><span>Öffnen</span><span>👍</span><span>👎</span><span>Gesehen</span></div>' : id === 'running' ? '<div class="prog"><i></i></div>' : '') + '</div>').join('') +
+  (id === 'running' ? '<div class="empty">Nächster Lauf: Kommentare auswerten · 16:05</div>' : '') + '</div>').join(''))
+const H0 = 7, H1 = 23, pos = h => ((h - H0) / (H1 - H0) * 100).toFixed(2) + '%'
+$('#hours', [8, 10, 12, 14, 16, 18, 20, 22].map(h => `<span style="left:${pos(h)}">${h}:00</span>`).join(''))
+const lanes = [
+  ['Kommentare auswerten', [[9.08, 'o'], [10.08, 'o'], [11.08, 'o'], [12.08, 'o'], [13.08, 'o'], [14.08, 'review'], [15.08, 'o'], [16.08, 'f'], [17.08, 'f'], [18.08, 'f'], [19.08, 'f'], [20.08, 'f'], [21.08, 'f'], [22.08, 'f']], '16:05'],
+  ['Link-Check morgens', [[8.5, 'review']], 'morgen 08:30'],
+  ['Newsletter-Digest', [[8.5, 'waiting']], 'morgen 08:30'],
+  ['Täglicher Backup-Check', [[10.25, 'blocked']], 'morgen 10:15'],
+  ['Uptime-Bericht', [[10.25, 'worked']], 'morgen 10:15'],
+  ['Preis-Watch', [[11.5, 'waiting']], 'morgen 11:30'],
+  ['Datenbank aufräumen', [[20.75, 'f']], '20:45'],
+]
+const lc = { worked: 'var(--green)', waiting: 'var(--amber)', blocked: 'var(--red)', review: 'var(--violet)' }
+$('#lanes', lanes.map(([n, runs, nx]) => `<div class="lane"><span class="n">${n}</span><div class="track">${runs.map(([h, s]) => `<i class="${lc[s] ? '' : s}" style="left:${pos(h)};--c:${lc[s] || ''}"></i>`).join('')}<span class="now" style="left:${pos(15.7)}"></span></div><span class="nx">${nx}</span></div>`).join(''))
+</script>
+</body></html>

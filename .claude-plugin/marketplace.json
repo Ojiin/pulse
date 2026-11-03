@@ -1,0 +1,14 @@
+{
+  "name": "claude-dashboard",
+  "owner": {
+    "name": "naphti88"
+  },
+  "plugins": [
+    {
+      "name": "routine-recorder",
+      "source": "./routine-recorder",
+      "description": "Records every scheduled-routine run for the routine dashboard"
+    }
+  ],
+  "description": "Routine recorder for Pulse and the Claude desktop app"
+}

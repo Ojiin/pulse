@@ -1,0 +1,877 @@
+/* Pulse: the panel under the menu bar item. The window itself is the
+   system's popover material (blurred, rounded); the page draws its groups on
+   cards on it. Colour says what an item wants, a grey symbol what it is. */
+
+:root {
+  --red: #e5484d;
+  --amber: #e2900a;
+  --violet: #8e4ec6;
+  --teal: #12a594;
+  --slate: #6b7a99;
+  --blue: #3e7bfa;
+  --green: #30a46c;
+  --grey: #8e8e93;
+  --ink: #1d1d1f;
+  --ink2: #3a3a3c;
+  --mute: #6e6e73;
+  --faint: #8e8e93;
+  --line: rgba(0, 0, 0, 0.08);
+  --hover: rgba(0, 0, 0, 0.04);
+  --fill: rgba(0, 0, 0, 0.055);
+  --card: rgba(255, 255, 255, 0.86);
+  /* the card as it shows on the material, for the cut-out parts of a symbol */
+  --card-solid: #fdfdfd;
+  --ground: transparent;
+  --shade: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --seg-on: #fff;
+  --knock: #f2f2f4;
+  --warn-bg: #fdf0d5;
+  --warn-ink: #8a5a00;
+  --link: #0a63d8;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --red: #ff5f65;
+    --amber: #ffb224;
+    --violet: #b48cff;
+    --teal: #3dd5be;
+    --slate: #9aa8c7;
+    --blue: #5b9bff;
+    --green: #46c37b;
+    --grey: #8b8b92;
+    --ink: #f5f5f7;
+    --ink2: #e4e4e9;
+    --mute: #b9b9c1;
+    --faint: #9a9aa3;
+    --line: rgba(255, 255, 255, 0.09);
+    --hover: rgba(255, 255, 255, 0.05);
+    --fill: rgba(255, 255, 255, 0.1);
+    /* the material is a mid grey in dark: the panel darkens it, the cards
+       sit on it almost solid, so text never stands grey on grey */
+    --ground: rgba(6, 6, 8, 0.74);
+    --card: rgba(40, 40, 45, 0.96);
+    --card-solid: #28282d;
+    --shade: 0 0 0 0.5px rgba(255, 255, 255, 0.09), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --seg-on: rgba(255, 255, 255, 0.16);
+    --knock: #2a2a2e;
+    --warn-bg: rgba(255, 178, 36, 0.18);
+    --warn-ink: #ffcf73;
+    --link: #6aa8ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+body {
+  font: 13px/1.38 -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--ink);
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: default;
+}
+
+.panel {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--ground);
+}
+.panel.pinned {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--link) 60%, transparent);
+  border-radius: 14px;
+}
+
+/* symbols and their colours */
+.glyph {
+  display: inline-block;
+  flex: none;
+}
+.glyph svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.m-blocked { --c: var(--red); }
+.m-waiting { --c: var(--amber); }
+.m-review { --c: var(--violet); }
+.m-commands { --c: var(--teal); }
+.m-parked { --c: var(--slate); }
+.m-running { --c: var(--blue); }
+.m-done { --c: var(--green); }
+.m-follow,
+.m-quiet { --c: var(--grey); }
+.s-blocked { color: var(--red); }
+.s-waiting { color: var(--amber); }
+.s-review { color: var(--violet); }
+.s-commands { color: var(--teal); }
+.s-parked { color: var(--slate); }
+.s-running { color: var(--blue); }
+.s-done { color: var(--green); }
+.s-quiet,
+.s-muted,
+.s-calm { color: var(--faint); }
+.type { color: var(--faint); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.88); } }
+@keyframes halo { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 50%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--red) 0%, transparent); } }
+@keyframes sweep { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+.spin { animation: spin 1.2s linear infinite; }
+.pulse { animation: pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .spin, .pulse, .disc.alert, .card.run::before { animation: none !important; }
+}
+
+/* the mark of an item: a disc in the colour of what it wants, the symbol of
+   what it is at its foot */
+.disc {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--c);
+  color: #fff;
+  --knock: var(--c);
+}
+.disc.pale {
+  background: color-mix(in srgb, var(--c) 16%, var(--card-solid));
+  color: var(--c);
+  --knock: color-mix(in srgb, var(--c) 16%, var(--card-solid));
+}
+.disc.alert {
+  animation: halo 1.6s ease-out infinite;
+}
+.disc.small {
+  width: 22px;
+  height: 22px;
+}
+.badge {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--card-solid);
+  color: var(--ink2);
+  box-shadow: 0 0 0 0.5px var(--line), 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* head: the counts, the tabs and the tools */
+.hdr {
+  padding: 12px 10px 0;
+  flex: none;
+}
+.counts {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.counts.none {
+  display: none;
+}
+.cnt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 99px;
+  font-weight: 650;
+  font-size: 11.5px;
+  white-space: nowrap;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  --knock: color-mix(in srgb, currentColor 13%, var(--card-solid));
+}
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -10px;
+  padding: 0 10px;
+  border-bottom: 0.5px solid var(--line);
+}
+.tabs > button {
+  padding: 6px 9px 8px;
+  margin-bottom: -0.5px;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.tabs > button:hover {
+  color: var(--ink);
+}
+.tabs > button.on {
+  color: var(--ink);
+  font-weight: 650;
+  border-color: var(--ink);
+}
+.tabs small {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.tools {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  padding-bottom: 3px;
+}
+.tb {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--mute);
+}
+.tb:hover {
+  color: var(--ink);
+  background: var(--fill);
+}
+.tb.on {
+  background: var(--link);
+  color: #fff;
+}
+
+/* body: the cards of the tab, scrolling when the window is at its limit */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+.body > div {
+  padding: 6px 8px 0;
+}
+.body::-webkit-scrollbar {
+  width: 0;
+}
+.empty {
+  padding: 30px 14px 26px;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--mute);
+}
+.empty b {
+  color: var(--ink);
+  font-size: 14px;
+}
+.empty.error {
+  color: var(--red);
+}
+
+/* a card: one group */
+.card {
+  position: relative;
+  margin-bottom: 6px;
+  border-radius: 13px;
+  background: var(--card);
+  box-shadow: var(--shade);
+  overflow: hidden;
+}
+.card.run::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent) no-repeat;
+  background-size: 50% 100%;
+  animation: sweep 2.4s linear infinite;
+}
+.ch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px 1px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c, var(--mute));
+  text-align: left;
+  --knock: var(--card-solid);
+}
+.ch-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch-aside {
+  margin-left: 6px;
+}
+.ch .n {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.chev {
+  width: 10px;
+  font-size: 7px;
+  color: var(--faint);
+  opacity: 0;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.ch:hover .chev {
+  opacity: 1;
+}
+.chev.open {
+  transform: rotate(90deg);
+}
+.card-body {
+  padding-bottom: 1px;
+}
+.link {
+  color: var(--link);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.more {
+  display: block;
+  padding: 2px 11px 7px 53px;
+}
+
+/* an item: title, folder, what Claude said */
+.row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  padding: 6px 11px 7px;
+  align-items: start;
+}
+.row + .row {
+  border-top: 0.5px solid var(--line);
+}
+.row:hover {
+  background: var(--hover);
+}
+.row > .disc {
+  grid-row: 1 / span 2;
+  margin-top: 1px;
+}
+.row.dim {
+  opacity: 0.65;
+}
+.title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.where {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1px 7px 1px 5px;
+  border-radius: 6px;
+  background: var(--fill);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.folder .glyph {
+  color: var(--faint);
+}
+.from {
+  font-size: 11.5px;
+  color: var(--mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row p {
+  grid-column: 2 / 4;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--mute);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.check .title {
+  font: 600 13px var(--mono);
+}
+.right {
+  display: flex;
+  align-items: center;
+  margin-top: 1px;
+}
+.age {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mute);
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 6px;
+}
+.age.warn {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.age.alarm {
+  background: var(--red);
+  color: #fff;
+  font-weight: 600;
+}
+.age.run {
+  color: var(--blue);
+}
+.acts {
+  display: none;
+  gap: 3px;
+}
+.row:hover .acts {
+  display: flex;
+}
+.row:hover .right:has(.acts:not(:empty)) :is(.age, .flag) {
+  display: none;
+}
+.act {
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--fill);
+  color: var(--mute);
+}
+.act:hover {
+  color: var(--ink);
+}
+
+/* Läuft: what runs now, what it does, its subagents at work */
+.card.run .tm {
+  font: 600 11.5px var(--mono);
+  color: var(--blue);
+  margin-top: 1px;
+}
+.doing {
+  grid-column: 2 / 4;
+  margin-top: 2px;
+  font: 11.5px var(--mono);
+  color: color-mix(in srgb, var(--blue) 70%, var(--ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) 9%, transparent);
+  color: var(--ink2);
+  font-size: 12px;
+}
+.agent > .glyph {
+  color: var(--blue);
+}
+.agent .what {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent b {
+  font-weight: 600;
+}
+.card.run .agent .tm {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--mute);
+  margin: 0;
+}
+
+/* Later, Parked and Known, folded below the cards of Open */
+.folds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 11px;
+  background: var(--card);
+  box-shadow: var(--shade);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-align: left;
+}
+.fold > .glyph {
+  color: var(--c);
+}
+.fold .n {
+  margin-left: auto;
+  color: var(--faint);
+  font-weight: 500;
+}
+.fold:hover,
+.fold.on {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), var(--shade);
+}
+
+/* the timeline, on one card */
+.card.tl {
+  padding: 0 12px 6px;
+}
+.day {
+  padding: 10px 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ev {
+  display: grid;
+  grid-template-columns: 38px 22px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 4px 0;
+}
+.ev > .glyph {
+  justify-self: center;
+}
+.ev .h {
+  font: 11.5px var(--mono);
+  color: var(--mute);
+  text-align: right;
+}
+.t1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ev b {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev.open-chat {
+  margin: 0 -12px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.ev.open-chat:hover {
+  background: var(--hover);
+}
+.ev.dim {
+  opacity: 0.6;
+}
+.ev .r {
+  font-size: 11.5px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.now {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 9px;
+  align-items: center;
+  margin: 4px 0;
+  color: var(--red);
+  font: 600 11px var(--mono);
+}
+.now span {
+  text-align: right;
+}
+.now::after {
+  content: '';
+  height: 1.5px;
+  background: var(--red);
+  border-radius: 1px;
+}
+
+.foot {
+  flex: none;
+  border-top: 0.5px solid var(--line);
+  padding: 7px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.problem {
+  color: var(--amber);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Einstellungen: the notifications on the Mac */
+.settings {
+  margin-bottom: 6px;
+  padding: 4px 14px 12px;
+  border-radius: 13px;
+  background: var(--card);
+  box-shadow: var(--shade);
+}
+.settings input {
+  accent-color: var(--blue);
+  font: inherit;
+  color: var(--ink);
+}
+.st-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0 8px;
+  font-size: 13px;
+}
+.st-problem {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 11.5px;
+}
+.st-rules {
+  width: 100%;
+  border-collapse: collapse;
+}
+.st-rules th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  padding: 0 0 4px;
+  width: 64px;
+}
+.st-rules td {
+  padding: 5px 0;
+  border-top: 0.5px solid var(--line);
+  text-align: center;
+}
+.st-rules td:first-child {
+  text-align: left;
+}
+.st-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.st-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+.st-block {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.st-label {
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 600;
+  width: 100%;
+}
+.st-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+  border-bottom: 0.5px solid var(--line);
+}
+.st-row .st-label {
+  width: auto;
+}
+.st-section {
+  display: block;
+  margin-bottom: 4px;
+}
+.st-hours {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 10px;
+  background: var(--fill);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.chip button {
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.chip button:hover {
+  color: var(--red);
+}
+.st-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+.st-add input,
+.st-time {
+  width: 58px;
+  padding: 2px 6px;
+  border: 0.5px solid var(--line);
+  border-radius: 5px;
+  background: var(--fill);
+}
+.st-time {
+  width: auto;
+}
+.st-add .link:disabled {
+  color: var(--faint);
+}
+.st-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* a command worth a look */
+.flag {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--mute);
+  background: var(--fill);
+}
+.flag.hot,
+.flag.stuck {
+  color: #fff;
+  background: var(--teal);
+}
+.flag.forgotten,
+.flag.long {
+  color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+}
+.st-limit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 24px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  font-size: 12.5px;
+}
+.st-limit input {
+  padding: 2px 6px;
+  border: 0.5px solid var(--line);
+  border-radius: 5px;
+  background: var(--fill);
+  text-align: right;
+}
+.st-unit {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+
+/* Verlauf: every session, by its last activity */
+.hist-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.hist-bar input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  padding: 5px 9px;
+  border: none;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shade);
+  outline: none;
+}
+.hist-bar input:focus {
+  box-shadow: 0 0 0 1.5px var(--blue);
+}
+.seg {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.seg button {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.seg button.on {
+  background: var(--seg-on);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
