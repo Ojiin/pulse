@@ -38,8 +38,8 @@ It has two parts:
 In a terminal:
 
 ```bash
-claude plugin marketplace add naphti88/claude-dashboard
-claude plugin install routine-recorder@claude-dashboard
+claude plugin marketplace add naphti88/pulse
+claude plugin install routine-recorder@pulse
 ```
 
 (or `/plugin marketplace add …` and `/plugin install …` in an interactive
@@ -52,7 +52,7 @@ Without the plugin Pulse falls back on the app's own summaries.
 ### 2. The app
 
 Download the `.dmg` (one app for Apple silicon and Intel) from the
-[latest release](https://github.com/naphti88/claude-dashboard/releases/latest),
+[latest release](https://github.com/naphti88/pulse/releases/latest),
 open it and drag Pulse to Applications.
 
 The app is not signed with an Apple developer certificate, so macOS refuses to
@@ -112,7 +112,7 @@ adapted.
 Quit Pulse from its menu bar symbol (right click → *Quit Pulse*), delete
 `/Applications/Pulse.app` and
 `~/Library/Application Support/local.claude-dashboard.pulse`. Remove the plugin
-with `claude plugin uninstall routine-recorder@claude-dashboard`, and its records
+with `claude plugin uninstall routine-recorder@pulse`, and its records
 with `~/.claude/routine-recorder` if you like.
 
 ## Development

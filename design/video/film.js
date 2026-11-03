@@ -324,7 +324,7 @@ function ring(key, r, t, a, b, color) {
 
 // ---------------------------------------------------------------- the close
 
-const closing = $('div', 'closing', dark, `<img src="/desktop/assets/app-icon.svg" alt=""><div class="name">Pulse</div><div class="for">For Claude Code on macOS</div><div class="url">github.com/naphti88/claude-dashboard</div>`)
+const closing = $('div', 'closing', dark, `<img src="/desktop/assets/app-icon.svg" alt=""><div class="name">Pulse</div><div class="for">For Claude Code on macOS</div><div class="url">github.com/naphti88/pulse</div>`)
 const [icon, name, forLine, url] = closing.children
 const edge = $('div', 'edge', stage)
 const black = $('div', 'black', stage)
