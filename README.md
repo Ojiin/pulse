@@ -5,7 +5,7 @@ scheduled routines going in the Claude desktop app. It shows at a glance what
 runs and what needs you: a question, a block, a result to read, a command
 left running in the background.
 
-https://github.com/user-attachments/assets/243432af-a76a-4753-8fad-027816639a3e
+https://github.com/user-attachments/assets/b85c4ad9-4e7a-4367-b419-6594073a9225
 
 - **Menu bar:** a coloured symbol and count per open state; a grey check when
   nothing needs you.
