@@ -9,7 +9,7 @@ use std::sync::{LazyLock, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::checks::Flag;
-use crate::util::home;
+use crate::util::support_dir;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -76,7 +76,7 @@ pub struct Store {
 pub static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| Mutex::new(load().unwrap_or_default()));
 
 fn path() -> Result<PathBuf, String> {
-    Ok(home()?.join("Library/Application Support/local.claude-dashboard.pulse/state.json"))
+    Ok(support_dir()?.join("state.json"))
 }
 
 fn load() -> Option<Store> {

@@ -9,7 +9,7 @@ use std::sync::{LazyLock, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::items::State;
-use crate::util::home;
+use crate::util::support_dir;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -138,7 +138,7 @@ impl Settings {
 pub static SETTINGS: LazyLock<Mutex<(Settings, Option<String>)>> = LazyLock::new(|| Mutex::new(load()));
 
 fn path() -> Result<PathBuf, String> {
-    Ok(home()?.join("Library/Application Support/local.claude-dashboard.pulse/settings.json"))
+    Ok(support_dir()?.join("settings.json"))
 }
 
 // no file: the defaults; a file that cannot be read: the defaults too, and

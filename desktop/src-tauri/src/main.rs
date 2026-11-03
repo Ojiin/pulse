@@ -4,6 +4,7 @@
 
 mod background;
 mod checks;
+mod codex;
 mod cron;
 mod history;
 mod inputs;
@@ -12,6 +13,10 @@ mod live;
 mod notify;
 mod panel;
 mod procs;
+#[cfg(target_os = "macos")]
+mod procs_mac;
+#[cfg(windows)]
+mod procs_win;
 mod running;
 mod runs;
 mod said;
@@ -28,7 +33,9 @@ use std::sync::atomic::Ordering;
 use std::sync::{LazyLock, Mutex};
 
 use chrono::Local;
-use tauri::{ActivationPolicy, AppHandle, Emitter, Manager, WindowEvent};
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_notification::NotificationExt;
 
@@ -99,9 +106,9 @@ pub fn push_last(app: &AppHandle) {
     }
 }
 
-// an app id as the app writes it: local_ and a UUID
+// an app id as the app writes it, local_ and a UUID, or a Codex thread's, codex_ and its UUID
 fn is_app_id(id: &str) -> bool {
-    id.len() == 42 && id.starts_with("local_") && id[6..].chars().all(|c| matches!(c, '0'..='9' | 'a'..='f' | '-'))
+    id.len() == 42 && (id.starts_with("local_") || id.starts_with(codex::PREFIX)) && id[6..].chars().all(|c| matches!(c, '0'..='9' | 'a'..='f' | '-'))
 }
 
 #[tauri::command]
@@ -160,8 +167,22 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
     tauri::async_runtime::spawn_blocking(move || refresh(&app)).await.map_err(|e| e.to_string())
 }
 
+#[cfg(target_os = "macos")]
 fn open(args: &[&str]) -> Result<(), String> {
     let status = Command::new("/usr/bin/open").args(args).status().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("open: {status}"))
+    }
+}
+
+// a link through the shell's handler for its scheme, without a console window
+#[cfg(windows)]
+fn open(args: &[&str]) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let status = Command::new("rundll32.exe").arg("url.dll,FileProtocolHandler").args(args).creation_flags(CREATE_NO_WINDOW).status().map_err(|e| e.to_string())?;
     if status.success() {
         Ok(())
     } else {
@@ -177,7 +198,10 @@ fn open_chat(app: AppHandle, id: String) -> Result<(), String> {
     if !panel::PINNED.load(Ordering::SeqCst) {
         panel::hide(&app);
     }
-    open(&[&format!("claude://claude.ai/epitaxy/{id}")])
+    match id.strip_prefix(codex::PREFIX) {
+        Some(thread) => open(&[&format!("codex://threads/{thread}")]),
+        None => open(&[&format!("claude://claude.ai/epitaxy/{id}")]),
+    }
 }
 
 // a session the panel does not show now (archived, long quiet), as the Verlauf has it
@@ -289,6 +313,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, set_pinned, set_compact, close_panel, panel_size, get_settings, set_settings, mark_command, history, is_placed, reset_place])
         .setup(|app| {
             // a menu bar app: no Dock icon, no app menu
+            #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
             let handle = app.handle().clone();
             if let Err(error) = handle.notification().request_permission() {

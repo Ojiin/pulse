@@ -79,10 +79,15 @@ function Action({ glyph, label, onClick }: { glyph: Parameters<typeof Glyph>[0][
   )
 }
 
+// a Codex thread rather than a Claude session (its id: codex_ and the thread's UUID)
+export const isCodex = (id: string) => id.startsWith('codex_')
+export const appOf = (id: string) => (isCodex(id) ? 'Codex' : 'Claude')
+
 // where an item plays: its folder, and the session it came from when Claude started it
-export function Where({ project, from, children }: { project: string; from?: string; children?: ReactNode }) {
+export function Where({ project, from, id, children }: { project: string; from?: string; id?: string; children?: ReactNode }) {
   return (
     <span className="where">
+      {id && isCodex(id) && <span className="app">Codex</span>}
       {project && (
         <span className="folder">
           <Glyph name="folder" size={12} />
@@ -104,7 +109,7 @@ export const fromOf = (item: { parentId?: string }, items: Item[]) => (item.pare
 export function Row({ item, now, from }: { item: Item; now: number; from?: string }) {
   const isDone = item.stage === 'done'
   return (
-    <div className={`row ${isDone ? 'dim' : ''}`} title="Open in Claude" onClick={() => void openChat(item.id)}>
+    <div className={`row ${isDone ? 'dim' : ''}`} title={`Open in ${appOf(item.id)}`} onClick={() => void openChat(item.id)}>
       <Disc mark={markOf(item)} type={typeOf(item)} alert={item.state === 'blocked' && item.stage === 'open'} />
       <b className="title" title={item.title}>
         {item.title}
@@ -115,13 +120,13 @@ export function Row({ item, now, from }: { item: Item; now: number; from?: strin
           {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen')} />}
           {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done')} />}
           {item.stage === 'parked' ? (
-            <Action glyph="external" label="Resume: open in Claude" onClick={() => void mark([item.id], 'resume').then(() => openChat(item.id))} />
+            <Action glyph="external" label={`Resume: open in ${appOf(item.id)}`} onClick={() => void mark([item.id], 'resume').then(() => openChat(item.id))} />
           ) : (
             item.stage !== 'running' && <Action glyph="parked" label="Park: keep it in mind" onClick={() => void mark([item.id], 'park')} />
           )}
         </span>
       </span>
-      <Where project={item.project} from={from} />
+      <Where project={item.project} from={from} id={item.id} />
       {item.stage !== 'running' && item.reason && <p title={item.reason}>{item.reason}</p>}
     </div>
   )
@@ -145,7 +150,7 @@ export function RunCard({ items, now }: { items: Item[]; now: number }) {
             <Disc mark="running" type={typeOf(i)} />
             <b className="title">{i.title}</b>
             <span className="tm">{elapsed(i.live?.turnStarted ?? i.since, now)}</span>
-            <Where project={i.project} from={fromOf(i, items)} />
+            <Where project={i.project} from={fromOf(i, items)} id={i.id} />
             <span className="doing">▸ {i.live?.tool ?? 'thinking'}</span>
             {agents.map(a => (
               <span key={a.id} className="agent" style={{ marginLeft: Math.max(0, a.depth - 1) * 14 }} title={`${a.type || 'Subagent'}${a.isBackground ? ' in the background' : ''}\n${a.description}`}>

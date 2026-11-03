@@ -1,7 +1,8 @@
 # Pulse
 
-A macOS menu bar app for people who keep many Claude Code sessions and
-scheduled routines going in the Claude desktop app. It shows at a glance what
+A macOS menu bar app (and Windows tray app) for people who keep many Claude Code
+sessions and scheduled routines going in the Claude desktop app, and threads in
+the Codex app. It shows at a glance what
 runs and what needs you: a question, a block, a result to read, a command
 left running in the background.
 
@@ -26,9 +27,45 @@ It has two parts:
 | [`routine-recorder`](routine-recorder) | A Claude Code plugin. It asks every session to end its answers with a `STATUS:` line (worked, waiting, blocked, idle, parked) and records each scheduled-routine run to `~/.claude/routine-recorder/runs`. |
 | [`desktop`](desktop) | Pulse itself, a Tauri app. It reads the sessions of the Claude desktop app, their transcripts and the records of the plugin. |
 
+## Windows and Codex
+
+Pulse also runs on Windows 10/11, where it sits in the notification area (the
+tray) and its panel opens above the taskbar. The tray shows one square: the most
+urgent state's symbol with a badge of everything open; the tooltip names each.
+On Windows Pulse reads:
+
+- the Claude app's sessions under `%LOCALAPPDATA%\Claude-Data\<package>` (the
+  Store app) or `%APPDATA%\Claude` (the classic installer);
+- the commands sessions run, from the processes that hold their
+  `%TEMP%\claude\…\tasks\<id>.output` open (through the Restart Manager);
+- its own state in `%APPDATA%\local.claude-dashboard.pulse`.
+
+**Codex.** Pulse shows the threads of the Codex app (desktop or CLI) beside
+Claude's sessions, marked *Codex*: their titles, folders, archive and read state
+from `~/.codex/state_5.sqlite`, and from each thread's rollout in
+`~/.codex/sessions` whether a turn runs now, its last tool and its last answer.
+A click opens the thread in Codex (`codex://threads/<id>`). Only threads you
+started in the Codex app or CLI count, not subagents, reviews or threads another
+tool drives through Codex. A finished turn is a result to read; one
+whose answer ends in a question asks you something. For the same states as a
+Claude session (waiting, blocked, parked), ask Codex for a STATUS line in
+`~/.codex/AGENTS.md`:
+
+```markdown
+End every answer with one line `STATUS: worked|waiting|blocked|idle|parked | one sentence`:
+worked when the task is done, waiting when you need the user, blocked when you cannot go on.
+```
+
+Codex keeps no record of approval prompts in its rollouts, so a Codex thread
+waiting for an approval shows as running.
+
+Build on Windows: Rust (rustup), Node 20+ and the Visual Studio C++ Build Tools,
+then `npm run setup` and `npm run build` in `desktop`; the installer lands in
+`desktop/src-tauri/target/release/bundle/nsis/`.
+
 ## Requirements
 
-- macOS 11 or later
+- macOS 11 or later, or Windows 10/11 (see [Windows and Codex](#windows-and-codex))
 - the [Claude desktop app](https://claude.ai/download), its Code tab: Pulse
   reads the sessions and scheduled tasks the app keeps
 - Claude Code on the command line (`claude`), to install the plugin
@@ -94,7 +131,7 @@ python3 -I tools/backfill_runs.py
 
 ## What it reads and writes
 
-Everything stays on your Mac; neither Pulse nor the plugin sends anything
+Everything stays on your computer; neither Pulse nor the plugin sends anything
 anywhere.
 
 - **Reads:** the Claude desktop app's sessions and scheduled tasks

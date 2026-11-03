@@ -1,7 +1,7 @@
 import { mark, openChat } from './api'
 import { DAY, clock, dayName, dayOf, until } from './format'
 import { Disc, Glyph, TYPE_LABEL, markOf, typeOf } from './glyphs'
-import { Card, CheckRow, ParkedRow, Row, fromOf, stateWord } from './parts'
+import { appOf, Card, CheckRow, ParkedRow, Row, fromOf, stateWord } from './parts'
 import type { Item, Snapshot } from './types'
 
 // Open: what needs the person, one card per state, the most urgent first;
@@ -114,7 +114,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
     <section className="card tl">
       <div className="day">Today</div>
       {past.map(e => (
-        <div className={`ev open-chat ${e.item?.state === 'quiet' ? 'dim' : ''}`} key={e.key} title="Open in Claude" onClick={() => e.item && void openChat(e.item.id)}>
+        <div className={`ev open-chat ${e.item?.state === 'quiet' ? 'dim' : ''}`} key={e.key} title={`Open in ${e.item ? appOf(e.item.id) : "Claude"}`} onClick={() => e.item && void openChat(e.item.id)}>
           <span className="h">{clock(e.at)}</span>
           {e.item && <Disc small mark={markOf(e.item)} />}
           <span className="t1">
@@ -128,7 +128,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
         </div>
       ))}
       {running.map(i => (
-        <div className="ev open-chat" key={i.id} title="Open in Claude" onClick={() => void openChat(i.id)}>
+        <div className="ev open-chat" key={i.id} title={`Open in ${appOf(i.id)}`} onClick={() => void openChat(i.id)}>
           <span className="h">{clock(i.startedAt)}</span>
           <Disc small mark="running" />
           <span className="t1">

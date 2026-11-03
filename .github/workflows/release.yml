@@ -1,6 +1,7 @@
-# A tag "v…" builds Pulse for Apple silicon and Intel in one app and puts it,
-# as a disk image and as a packed app, on a draft release of that tag. The app
-# is signed ad hoc only, not with a developer certificate (see the README).
+# A tag "v…" builds Pulse for Apple silicon and Intel in one app, as a disk
+# image and as a packed app, and for Windows, as an installer, and puts them on
+# a draft release of that tag. Neither is signed with a developer certificate
+# (see the README).
 # Started by hand, it builds a tag that is already there.
 name: Release
 
@@ -39,6 +40,30 @@ jobs:
         with:
           projectPath: desktop
           args: --target universal-apple-darwin --bundles app,dmg
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: Pulse ${{ inputs.tag || github.ref_name }}
+          releaseBody: See the README for how to install the plugin and open the unsigned app.
+          releaseDraft: true
+
+  # the same tag for Windows: an installer (NSIS) on the same draft release
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Packages
+        working-directory: desktop
+        run: npm run setup
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          args: --bundles nsis
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: Pulse ${{ inputs.tag || github.ref_name }}
           releaseBody: See the README for how to install the plugin and open the unsigned app.

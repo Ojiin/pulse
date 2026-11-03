@@ -338,5 +338,7 @@ pub fn load_inputs() -> Result<Inputs, String> {
                 .collect()
         }
     };
+    // the Codex app's threads, after the dots: it keeps its own read state
+    crate::codex::read(&p.codex, &mut inputs);
     Ok(inputs)
 }

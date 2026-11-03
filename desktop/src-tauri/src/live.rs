@@ -43,6 +43,11 @@ const SHELL: [&str; 2] = ["Bash", "PowerShell"];
 const PATIENCE_MS: f64 = 30_000.0;
 
 impl Live {
+    // a Codex turn, as its rollout tells it (codex.rs)
+    pub fn of_codex(turn_started: Option<f64>, tool: Option<String>, tools: usize) -> Live {
+        Live { turn_started, tool, tools, ..Default::default() }
+    }
+
     // the call that waits for the person's approval: a shell command open
     // for a few seconds without a process of the session running (has_process
     // says whether one runs in the foreground), or a quick tool open as long

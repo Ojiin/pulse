@@ -926,3 +926,12 @@ button {
   background: var(--seg-on);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
+.app {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mute);
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 6px;
+}

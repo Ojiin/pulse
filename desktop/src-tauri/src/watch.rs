@@ -23,6 +23,7 @@ pub fn start(app: AppHandle, refresh: fn(&AppHandle)) -> Result<(), String> {
         (&p.runs, RecursiveMode::NonRecursive),
         (&p.projects, RecursiveMode::Recursive),
         (&p.leveldb, RecursiveMode::NonRecursive),
+        (&p.codex.join("sessions"), RecursiveMode::Recursive),
     ] {
         // a folder that is missing now is reported by the inputs as a problem
         if path.exists() {

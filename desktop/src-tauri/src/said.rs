@@ -41,7 +41,7 @@ fn status_line(line: &str) -> Option<Said> {
 }
 
 // the last STATUS line of an answer
-fn status_of(text: &str) -> Option<Said> {
+pub fn status_of(text: &str) -> Option<Said> {
     text.lines().filter_map(status_line).last()
 }
 

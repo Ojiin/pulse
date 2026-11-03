@@ -21,6 +21,9 @@ const MAX_HEIGHT: f64 = 760.0;
 
 pub static PINNED: AtomicBool = AtomicBool::new(false);
 pub static COMPACT: AtomicBool = AtomicBool::new(false);
+// the panel opened above the item (a taskbar at the screen's foot): it grows
+// and shrinks upward, its foot stays
+static ABOVE: AtomicBool = AtomicBool::new(false);
 // a click on the item takes the focus from the panel first: a panel that just
 // closed that way stays closed
 static CLOSED_AT: LazyLock<Mutex<Option<Instant>>> = LazyLock::new(Default::default);
@@ -138,7 +141,19 @@ fn show(app: &AppHandle, w: &WebviewWindow, rect: Rect) {
         let (left, right) = (monitor.position().x as f64, monitor.position().x as f64 + monitor.size().width as f64);
         x = x.clamp(left + 8.0 * scale, right - size - 8.0 * scale);
     }
-    let anchor = PhysicalPosition::new(x.round() as i32, (item.y + item_size.height + 6.0 * scale).round() as i32);
+    // below the item in a menu bar; above it in a taskbar at the screen's foot
+    let mut y = item.y + item_size.height + 6.0 * scale;
+    let mut above = false;
+    if let Ok(Some(monitor)) = w.monitor_from_point(item.x, item.y).or_else(|_| w.primary_monitor()) {
+        let (top, height) = (monitor.position().y as f64, monitor.size().height as f64);
+        if item.y > top + height / 2.0 {
+            let panel = w.outer_size().map_or(560.0 * scale, |s| s.height as f64);
+            y = (item.y - panel - 6.0 * scale).max(top);
+            above = true;
+        }
+    }
+    ABOVE.store(above, Ordering::SeqCst);
+    let anchor = PhysicalPosition::new(x.round() as i32, y.round() as i32);
     *ANCHOR.lock().expect("panel") = Some(anchor);
     let placed = STORE.lock().expect("store").panel_at.filter(|&at| on_screen(w, at));
     let [x, y] = placed.unwrap_or([anchor.x, anchor.y]);
@@ -203,11 +218,21 @@ pub fn set_size(app: &AppHandle, width: Option<f64>, height: f64) {
         let min = if width.is_some() { 24.0 } else { 200.0 };
         let width = width.map_or(WIDTH, |w| w.clamp(80.0, 640.0));
         let (Ok(at), old) = (w.outer_position(), current_width(&w)) else { return };
+        let old_height = w.outer_size().map_or(0, |s| s.height as i32);
         let big_x = big_x_of(&w, at.x, old);
         let _ = w.set_size(LogicalSize::new(width, height.clamp(min, MAX_HEIGHT)));
         let new = (width * w.scale_factor().unwrap_or(2.0)).round() as i32;
-        if new != old {
-            move_to(&w, PhysicalPosition::new(x_for(&w, big_x, new), at.y));
+        let y = match w.outer_size() {
+            Ok(size) if ABOVE.load(Ordering::SeqCst) && !is_placed() => at.y + old_height - size.height as i32,
+            _ => at.y,
+        };
+        if y != at.y {
+            if let Some(anchor) = ANCHOR.lock().expect("panel").as_mut() {
+                anchor.y = y;
+            }
+        }
+        if new != old || y != at.y {
+            move_to(&w, PhysicalPosition::new(x_for(&w, big_x, new), y));
         }
     }
 }

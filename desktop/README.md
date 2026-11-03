@@ -132,7 +132,7 @@ Rust is pinned in `src-tauri/rust-toolchain.toml` (Tauri needs ≥ 1.90).
 
 ```bash
 npm run setup        # the Tauri CLI and the panel's packages
-npm run build        # → src-tauri/target/release/bundle/macos/Pulse.app
+npm run build        # → src-tauri/target/release/bundle/macos/Pulse.app (Windows: bundle/nsis/Pulse_<version>_x64-setup.exe)
 npm run dev          # the panel with hot reload (vite on 5199)
 npm test             # the Rust tests
 npm run icons        # app icon (assets/app-icon.svg) and menu bar masks, then the icon set

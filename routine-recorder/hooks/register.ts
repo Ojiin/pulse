@@ -111,7 +111,8 @@ type State = {
 }
 
 async function load($: $, s: State): Promise<RunRecord | null> {
-  const home = await $.env.get('HOME')
+  // Windows may set no HOME, only USERPROFILE
+  const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
   const id = await $.session.id()
   s.file = `${home}/.claude/routine-recorder/runs/${id}.json`
   if (!(await $.fs.exists(s.file))) return null

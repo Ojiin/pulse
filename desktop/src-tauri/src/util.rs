@@ -9,7 +9,39 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::Value;
 
 pub fn home() -> Result<PathBuf, String> {
-    std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| "HOME is not set.".to_string())
+    // started from Explorer, Windows sets no HOME, only USERPROFILE
+    #[cfg(windows)]
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"));
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME");
+    home.map(PathBuf::from).ok_or_else(|| "HOME is not set.".to_string())
+}
+
+// where Pulse keeps its state and settings
+pub fn support_dir() -> Result<PathBuf, String> {
+    #[cfg(windows)]
+    return std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("local.claude-dashboard.pulse")).ok_or_else(|| "APPDATA is not set.".to_string());
+    #[cfg(not(windows))]
+    return Ok(home()?.join("Library/Application Support/local.claude-dashboard.pulse"));
+}
+
+// the Claude app's own folder: on Windows the Store app keeps it under
+// %LOCALAPPDATA%\Claude-Data\<package>, the classic installer under %APPDATA%\Claude
+#[cfg(windows)]
+fn claude_dir(_home: &Path) -> PathBuf {
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();
+    let packaged = std::fs::read_dir(local.join("Claude-Data"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.join("claude-code-sessions").is_dir());
+    packaged.unwrap_or_else(|| std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default().join("Claude"))
+}
+
+#[cfg(not(windows))]
+fn claude_dir(home: &Path) -> PathBuf {
+    home.join("Library/Application Support/Claude")
 }
 
 pub struct Paths {
@@ -17,15 +49,18 @@ pub struct Paths {
     pub runs: PathBuf,
     pub projects: PathBuf,
     pub leveldb: PathBuf,
+    pub codex: PathBuf,
 }
 
 pub fn paths() -> Result<Paths, String> {
     let home = home()?;
+    let claude = claude_dir(&home);
     Ok(Paths {
-        app: home.join("Library/Application Support/Claude/claude-code-sessions"),
+        app: claude.join("claude-code-sessions"),
         runs: home.join(".claude/routine-recorder/runs"),
         projects: home.join(".claude/projects"),
-        leveldb: home.join("Library/Application Support/Claude/Local Storage/leveldb"),
+        leveldb: claude.join("Local Storage/leveldb"),
+        codex: home.join(".codex"),
     })
 }
 
