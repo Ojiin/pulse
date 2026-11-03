@@ -18,7 +18,7 @@ the panel (`ui/`, React) only draws.
   running item with what it does now and a line per subagent at work: its
   kind, its task, how long; three shown, the rest behind "+n more"); then
   what needs you, a card per state (in each what lies longer than 24 h on
-  top, its age on red; below, *Later* and *Parked* folded). *Timeline* shows
+  top, its age on red; below a rule, *Set aside*: *Later*, *Parked* and *Known*, each on a quieter card that its head folds). *Timeline* shows
   today, now, what comes and what was missed, *History* every session the app
   keeps, archived ones too, by its last activity and grouped by day, with
   what it said last (a search through title, folder and that sentence;

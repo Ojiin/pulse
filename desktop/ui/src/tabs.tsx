@@ -1,19 +1,16 @@
 import { mark, openChat } from './api'
 import { DAY, clock, dayName, dayOf, until } from './format'
 import { Disc, Glyph, TYPE_LABEL, markOf, typeOf } from './glyphs'
-import { Card, CheckRow, ParkedRow, Row, fromOf, stateWord, useOpen } from './parts'
+import { Card, CheckRow, ParkedRow, Row, fromOf, stateWord } from './parts'
 import type { Item, Snapshot } from './types'
 
 // Open: what needs the person, one card per state, the most urgent first;
 // in each what lies longer than a day on top, the oldest first; below, what
 // they saw and have not closed, what they set aside and the commands marked
-// as known, folded
+// as known, each on a folded card of its own below a rule
 export function OpenTab({ snap, now }: { snap: Snapshot; now: number }) {
   const open = snap.items.filter(i => i.stage === 'open')
   const follow = snap.items.filter(i => i.stage === 'follow')
-  const [showFollow, toggleFollow] = useOpen('open-follow', false)
-  const [showParked, toggleParked] = useOpen('open-parked', false)
-  const [showKnown, toggleKnown] = useOpen('open-known', false)
   // the commands worth a look; those marked as known only folded, until their next step
   const checks = snap.checks.filter(c => c.flag && !c.known)
   const known = snap.checks.filter(c => c.flag && c.known)
@@ -51,37 +48,18 @@ export function OpenTab({ snap, now }: { snap: Snapshot; now: number }) {
         )
       })}
       {(follow.length > 0 || snap.parked.length > 0 || known.length > 0) && (
-        <div className="folds">
-          {follow.length > 0 && (
-            <button className={`fold m-follow ${showFollow ? 'on' : ''}`} title="Read, still open" onClick={toggleFollow}>
-              <Glyph name="follow" size={14} />
-              <span>Later</span>
-              <span className="n">{follow.length}</span>
-            </button>
-          )}
-          {snap.parked.length > 0 && (
-            <button className={`fold m-parked ${showParked ? 'on' : ''}`} title="Kept in mind" onClick={toggleParked}>
-              <Glyph name="parked" size={14} />
-              <span>Parked</span>
-              <span className="n">{snap.parked.length}</span>
-            </button>
-          )}
-          {known.length > 0 && (
-            <button className={`fold m-commands ${showKnown ? 'on' : ''}`} title="Commands marked as known, until their next reminder step" onClick={toggleKnown}>
-              <Glyph name="commands" size={14} />
-              <span>Known</span>
-              <span className="n">{known.length}</span>
-            </button>
-          )}
+        <div className="set-aside">
+          <span>Set aside</span>
         </div>
       )}
-      {showFollow && follow.length > 0 && (
+      {follow.length > 0 && (
         <Card
-          id="open-follow-list"
-          fixed
+          id="open-follow"
+          initial={false}
           mark="follow"
           title="Later · read, still open"
           count={follow.length}
+          className="aside"
           aside={
             <button className="link" onClick={() => void mark(follow.map(i => i.id), 'done')}>
               All done
@@ -91,16 +69,16 @@ export function OpenTab({ snap, now }: { snap: Snapshot; now: number }) {
           {follow.map(row)}
         </Card>
       )}
-      {showParked && snap.parked.length > 0 && (
-        <Card id="open-parked-list" fixed mark="parked" title="Parked · kept in mind" count={snap.parked.length}>
+      {snap.parked.length > 0 && (
+        <Card id="open-parked" initial={false} mark="parked" title="Parked · kept in mind" count={snap.parked.length} className="aside">
           {snap.parked.map(p => {
             const item = snap.items.find(i => i.id === p.id)
             return <ParkedRow key={p.id} parked={p} now={now} type={item && typeOf(item)} />
           })}
         </Card>
       )}
-      {showKnown && known.length > 0 && (
-        <Card id="open-known-list" fixed mark="commands" title="Known · until the next step" count={known.length}>
+      {known.length > 0 && (
+        <Card id="open-known" initial={false} mark="commands" title="Known · until the next step" count={known.length} className="aside">
           {known.map(c => (
             <CheckRow key={c.key} check={c} now={now} />
           ))}
