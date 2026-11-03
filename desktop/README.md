@@ -52,7 +52,8 @@ the panel (`ui/`, React) only draws.
   default 2, 4, 12 and 24) and then daily; a summary each morning at a chosen
   time (by default 8:00), or at the first look after it. By default blocked
   and questions are told at once, everything open is reminded of. Quiet hours
-  are left to macOS Focus.
+  are left to macOS Focus. A click on a notification about one session opens
+  its chat in Claude.
 - **Appearance**, also under the gear: the panel light, dark or as the
   system is (the default); the window's material follows it.
 - Right click on the item: start at login, quit.
@@ -76,7 +77,9 @@ a routine run or from the end of a chat's transcript; a chat from before that
 is filed by the app's own summary. A session that puts a choice or a plan to you in the middle of its turn asks
 you something, not runs. A session that waits for your approval of a call is
 blocked, not running:
-a shell command open for 8 s without its process, or an edit open as long.
+a shell command open for 30 s without its process, or an edit open as long
+(in auto mode a classifier looks at a command for 10 to 15 s before it runs,
+and the session goes on by itself whether it allows it or not).
 A session whose turn ended but that still
 has a command, workflow or monitor running in the background (or a background
 subagent) is running: it waits for that work and goes on when it is done;

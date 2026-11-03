@@ -16,6 +16,8 @@ use crate::store::{Store, Told};
 const HOUR: f64 = 3_600_000.0;
 // more than this many at once are told as one
 const AT_ONCE: usize = 3;
+// the key of the session's id among a notification's extras
+pub const SESSION: &str = "session";
 
 // how many reminders an item that lay for this long has earned: one per step
 // passed, then one every 24 hours after the last step
@@ -69,8 +71,13 @@ fn check_line(check: &Check) -> String {
     parts.join(" · ")
 }
 
-fn send(app: &AppHandle, title: &str, body: &str) {
-    if let Err(error) = app.notification().builder().title(title).body(body).show() {
+// a notification about one session carries its id: a click opens its chat (main.rs)
+fn send(app: &AppHandle, title: &str, body: &str, session: Option<&str>) {
+    let mut builder = app.notification().builder().title(title).body(body);
+    if let Some(id) = session {
+        builder = builder.extra(SESSION, id);
+    }
+    if let Err(error) = builder.show() {
         eprintln!("notify: {error}");
     }
 }
@@ -112,7 +119,7 @@ fn summary(app: &AppHandle, snap: &Snapshot, parked_weekly: bool) {
         let more = if snap.parked.len() > 3 { format!(" (+{})", snap.parked.len() - 3) } else { String::new() };
         lines.push(format!("Parked: {names}{more}"));
     }
-    send(app, &title, &lines.join("\n"));
+    send(app, &title, &lines.join("\n"), None);
 }
 
 // what to tell after a new snapshot; returns whether the store changed
@@ -193,19 +200,19 @@ pub fn tell(app: &AppHandle, snap: &Snapshot, store: &mut Store, settings: &Sett
     let n = fresh.len() + reminders.len() + fresh_checks.len() + remind_checks.len();
     if n > AT_ONCE {
         let names = fresh.iter().chain(&reminders).map(|i| i.title.as_str()).chain(fresh_checks.iter().map(|c| c.0.what.as_str())).chain(remind_checks.iter().map(|c| c.0.what.as_str())).take(4).collect::<Vec<_>>().join(", ");
-        send(app, &format!("{n} items need you"), &names);
+        send(app, &format!("{n} items need you"), &names, None);
     } else {
         for (check, flag) in &fresh_checks {
-            send(app, &format!("{}: {}", flag_label(*flag), check.what), &check_line(check));
+            send(app, &format!("{}: {}", flag_label(*flag), check.what), &check_line(check), check.session_id.as_deref());
         }
         for (check, flag, since) in &remind_checks {
-            send(app, &format!("For {}: {}", age_text(snap.now - since), check.what), &format!("{} · {}", flag_label(*flag), check_line(check)));
+            send(app, &format!("For {}: {}", age_text(snap.now - since), check.what), &format!("{} · {}", flag_label(*flag), check_line(check)), check.session_id.as_deref());
         }
         for item in &fresh {
-            send(app, &format!("{}: {}", label(item.state), item.title), &line(item));
+            send(app, &format!("{}: {}", label(item.state), item.title), &line(item), Some(&item.id));
         }
         for item in &reminders {
-            send(app, &format!("Open for {}: {}", age_text(snap.now - item.since), item.title), &format!("{} · {}", label(item.state), line(item)));
+            send(app, &format!("Open for {}: {}", age_text(snap.now - item.since), item.title), &format!("{} · {}", label(item.state), line(item)), Some(&item.id));
         }
     }
 

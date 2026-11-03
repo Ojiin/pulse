@@ -284,6 +284,16 @@ fn main() {
             if let Err(error) = handle.notification().request_permission() {
                 eprintln!("notify: {error}");
             }
+            // a click on a notification about one session opens its chat in Claude
+            let clicked = handle.clone();
+            handle.notification().on_action(move |action| {
+                let id = action.notification().and_then(|n| n.extra().get(notify::SESSION)).and_then(|v| v.as_str());
+                if let ("tap", Some(id)) = (action.action_id(), id) {
+                    if let Err(error) = open_chat(clicked.clone(), id.to_string()) {
+                        eprintln!("notify: {error}");
+                    }
+                }
+            })?;
             panel::set_appearance(&handle, SETTINGS.lock().expect("settings").0.appearance);
             tray::build(&handle)?;
             watch::start(handle.clone(), refresh)?;

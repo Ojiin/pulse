@@ -38,8 +38,9 @@ const QUESTIONS: [&str; 2] = ["AskUserQuestion", "ExitPlanMode"];
 const INSTANT: [&str; 5] = ["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"];
 const SHELL: [&str; 2] = ["Bash", "PowerShell"];
 // how long a call may be open before it counts as waiting for approval; in
-// auto mode a classifier looks at a command for a few seconds before it runs
-const PATIENCE_MS: f64 = 8_000.0;
+// auto mode a classifier looks at a command before it runs, often 10 to 15
+// seconds, and the session goes on by itself whether it allows the command or not
+const PATIENCE_MS: f64 = 30_000.0;
 
 impl Live {
     // the call that waits for the person's approval: a shell command open
@@ -215,10 +216,12 @@ mod tests {
         apply(&mut live, &line(PROMPT));
         apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-10-30T10:00:01.000Z","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"make test"}}]}}"#));
         let at = parse_time("2026-10-30T10:00:01.000Z").expect("time");
-        // a moment after the call, or with its process running: it runs
+        // a moment after the call, while a classifier may look at it, or with
+        // its process running: it runs
         assert_eq!(live.awaiting(at + 1_000.0, false), None);
+        assert_eq!(live.awaiting(at + 15_000.0, false), None);
         assert_eq!(live.awaiting(at + 60_000.0, true), None);
-        assert_eq!(live.awaiting(at + 10_000.0, false), Some(("Bash · make test".to_string(), at)));
+        assert_eq!(live.awaiting(at + 31_000.0, false), Some(("Bash · make test".to_string(), at)));
         // an edit open for seconds waits too; an MCP call is not judged
         apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-10-30T10:00:01.000Z","message":{"content":[{"type":"tool_use","id":"t2","name":"mcp__x__fetch","input":{"url":"https://example.com"}}]}}"#));
         assert_eq!(live.awaiting(at + 60_000.0, false), None);
