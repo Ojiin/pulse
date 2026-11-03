@@ -61,7 +61,7 @@ export function Card(props: { id: string; mark?: Mark; title: ReactNode; count?:
 }
 
 export function Age({ t, now }: { t: number; now: number }) {
-  return <span className={`age ${ageLevel(t, now)}`}>{since(t, now)}</span>
+  return <span className={`age ${ageLevel(t, now)}`}>{ago(t, now)}</span>
 }
 
 function Action({ glyph, label, onClick }: { glyph: Parameters<typeof Glyph>[0]['name']; label: string; onClick: () => void }) {
@@ -238,7 +238,7 @@ export function ParkedRow({ parked: p, now, type }: { parked: ParkedView; now: n
       </b>
       <span className="right">
         <span className="age" title="parked">
-          {since(p.at, now)}
+          {ago(p.at, now)}
         </span>
         <span className="acts">
           {p.gone ? (
