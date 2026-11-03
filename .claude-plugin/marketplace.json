@@ -7,7 +7,7 @@
     {
       "name": "routine-recorder",
       "source": "./routine-recorder",
-      "description": "Records every scheduled-routine run for the routine dashboard"
+      "description": "Asks every session for a STATUS line and records every scheduled-routine run, for Pulse"
     }
   ],
   "description": "Routine recorder for Pulse and the Claude desktop app"
