@@ -11,7 +11,13 @@ the panel (`ui/`, React) only draws.
   question, result to look at) and a teal hourglass for commands worth a look,
   a grey check when nothing needs you. What runs shows only in the panel. The image is drawn only when a count changes.
 - **Panel** (left click on the item; it closes on a click elsewhere unless it
-  is pinned), in English: on top a count per open state that has one ("All
+  is pinned; dragged by its head, pinned or not, it opens where it was put,
+  until the turning arrow beside the pin takes it back below the item; made
+  small with the arrows inward it is only a bar of the counts, what runs
+  among them when nothing else is open, that stays open like a pinned panel,
+  and a click on a count, on the menu bar item or on a notification that is
+  about no one session makes it big again; small or big it keeps the edge
+  nearer to the side of its screen), in English: on top a count per open state that has one ("All
   quiet" when nothing needs you and nothing runs), below them the tabs
   *Open*, *Timeline* and *History*. Every group is a card. *Open* begins with
   the card *Running now*, the one place that changes by the second (each
@@ -55,7 +61,9 @@ the panel (`ui/`, React) only draws.
   are left to macOS Focus. A click on a notification about one session opens
   its chat in Claude.
 - **Appearance**, also under the gear: the panel light, dark or as the
-  system is (the default); the window's material follows it.
+  system is (the default); the window's material follows it. The app icon in the
+  foot of the panel follows it too: `assets/app-icon.svg` dark,
+  `assets/app-icon-light.svg` light.
 - Right click on the item: start at login, quit.
 
 ## An item's life

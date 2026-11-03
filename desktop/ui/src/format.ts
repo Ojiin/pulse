@@ -38,6 +38,12 @@ export const since = (t: number, now: number) => {
 // "5 h ago"
 export const ago = (t: number, now: number) => `${since(t, now).slice(4)} ago`
 
+// "12 s ago", "3 min ago": how fresh what the panel shows is
+export const agoShort = (t: number, now: number) => {
+  const s = Math.max(0, Math.floor((now - t) / 1000))
+  return s < 60 ? `${s} s ago` : ago(t, now)
+}
+
 // 2 h and more lies a while, 24 h and more too long
 export const ageLevel = (t: number, now: number) => (now - t >= DAY ? 'alarm' : now - t >= 2 * HOUR ? 'warn' : '')
 

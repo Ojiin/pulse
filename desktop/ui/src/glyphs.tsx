@@ -26,6 +26,11 @@ const SVG: Record<string, string> = {
   pin: `<path d="M11.6 1.8l4.6 4.6-1.4 1.4-1-.4-2.6 2.6.3 3.2-1.3 1.3-3.3-3.3-3.9 3.9-.9-.9 3.9-3.9-3.3-3.3 1.3-1.3 3.2.3 2.6-2.6-.4-1z" fill="currentColor"/>`,
   pinOff: `<path d="M11.6 1.8l4.6 4.6-1.4 1.4-1-.4-2.6 2.6.3 3.2-1.3 1.3-3.3-3.3-3.9 3.9-.9-.9 3.9-3.9-3.3-3.3 1.3-1.3 3.2.3 2.6-2.6-.4-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>`,
   external: `<path d="M10 2.5h5.5V8M15.2 2.8L8.5 9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 11v3a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 013 14V7a1.5 1.5 0 011.5-1.5h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  // back below the menu bar item: an arrow turning back
+  recenter: `<path d="M4.4 6.6A5.6 5.6 0 1 1 3.6 11.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3.6 2.8v3.9h3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  // small and big again: arrows in to the middle, out to the corners
+  shrink: `<path d="M2.8 2.8l4.4 4.4M7.2 3.4v3.8H3.4M15.2 15.2l-4.4-4.4M10.8 14.6v-3.8h3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  grow: `<path d="M7.2 7.2L2.8 2.8M2.8 6.6V2.8h3.8M10.8 10.8l4.4 4.4M15.2 11.4v3.8h-3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
   close: `<path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`,
   folder: `<path d="M1.8 4.6a1.6 1.6 0 011.6-1.6h3.4l1.8 1.8h6a1.6 1.6 0 011.6 1.6v7.4a1.6 1.6 0 01-1.6 1.6H3.4a1.6 1.6 0 01-1.6-1.6z" fill="currentColor"/>`,
   check: `<path d="M4 9.4l3.2 3.2L14 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,

@@ -22,10 +22,22 @@ export function useSnapshot() {
 
 export const mark = (ids: string[], kind: 'seen' | 'done' | 'open' | 'park' | 'resume' | 'forget') => invoke('mark', { ids, kind })
 export const openChat = (id: string) => invoke('open_chat', { id })
-export const openClaude = () => invoke('open_claude')
 export const setPinned = (pinned: boolean) => invoke<boolean>('set_pinned', { pinned })
 export const closePanel = () => invoke('close_panel')
-export const panelHeight = (height: number) => invoke('panel_height', { height })
+export const panelSize = (height: number, width?: number) => invoke('panel_size', { width, height })
+export const setCompact = (compact: boolean) => invoke('set_compact', { compact })
+
+// whether the panel was moved to a place of its own, kept up to date
+export function usePlaced() {
+  const [placed, setPlaced] = useState(false)
+  useEffect(() => {
+    invoke<boolean>('is_placed').then(setPlaced, () => undefined)
+    const stop = listen<boolean>('placed', e => setPlaced(e.payload))
+    return () => void stop.then(f => f())
+  }, [])
+  return placed
+}
+export const resetPlace = () => invoke('reset_place')
 export const markCommand = (key: string, known: boolean) => invoke('mark_command', { key, known })
 export const getHistory = () => invoke<Entry[]>('history')
 export const getSettings = () => invoke<{ settings: Settings; problem?: string }>('get_settings')

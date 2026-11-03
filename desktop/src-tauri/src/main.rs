@@ -180,14 +180,6 @@ fn open_chat(app: AppHandle, id: String) -> Result<(), String> {
     open(&[&format!("claude://claude.ai/epitaxy/{id}")])
 }
 
-#[tauri::command]
-fn open_claude(app: AppHandle) -> Result<(), String> {
-    if !panel::PINNED.load(Ordering::SeqCst) {
-        panel::hide(&app);
-    }
-    open(&["-b", "com.anthropic.claudefordesktop"])
-}
-
 // a session the panel does not show now (archived, long quiet), as the Verlauf has it
 fn history_entry(id: &str) -> Option<history::Entry> {
     let inputs = inputs::load_inputs().ok()?;
@@ -267,16 +259,34 @@ fn close_panel(app: AppHandle) {
     panel::hide(&app);
 }
 
+// the size of the content: small, only as wide as the counts
 #[tauri::command]
-fn panel_height(app: AppHandle, height: f64) {
-    panel::set_height(&app, height);
+fn panel_size(app: AppHandle, width: Option<f64>, height: f64) {
+    panel::set_size(&app, width, height);
+}
+
+// small, the panel stays open like a pinned one
+#[tauri::command]
+fn set_compact(compact: bool) {
+    panel::COMPACT.store(compact, Ordering::SeqCst);
+}
+
+// whether the panel was moved to a place of its own, and back below the item
+#[tauri::command]
+fn is_placed() -> bool {
+    panel::is_placed()
+}
+
+#[tauri::command]
+fn reset_place(app: AppHandle) {
+    panel::reset_place(&app);
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, open_claude, set_pinned, close_panel, panel_height, get_settings, set_settings, mark_command, history])
+        .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, set_pinned, set_compact, close_panel, panel_size, get_settings, set_settings, mark_command, history, is_placed, reset_place])
         .setup(|app| {
             // a menu bar app: no Dock icon, no app menu
             app.set_activation_policy(ActivationPolicy::Accessory);
@@ -284,14 +294,20 @@ fn main() {
             if let Err(error) = handle.notification().request_permission() {
                 eprintln!("notify: {error}");
             }
-            // a click on a notification about one session opens its chat in Claude
+            // a click on a notification about one session opens its chat in
+            // Claude, on any other the panel, big
             let clicked = handle.clone();
             handle.notification().on_action(move |action| {
-                let id = action.notification().and_then(|n| n.extra().get(notify::SESSION)).and_then(|v| v.as_str());
-                if let ("tap", Some(id)) = (action.action_id(), id) {
-                    if let Err(error) = open_chat(clicked.clone(), id.to_string()) {
-                        eprintln!("notify: {error}");
+                if action.action_id() != "tap" {
+                    return;
+                }
+                match action.notification().and_then(|n| n.extra().get(notify::SESSION)).and_then(|v| v.as_str()) {
+                    Some(id) => {
+                        if let Err(error) = open_chat(clicked.clone(), id.to_string()) {
+                            eprintln!("notify: {error}");
+                        }
                     }
+                    None => panel::open_big(&clicked),
                 }
             })?;
             panel::set_appearance(&handle, SETTINGS.lock().expect("settings").0.appearance);
@@ -302,6 +318,7 @@ fn main() {
         })
         .on_window_event(|window, event| match event {
             WindowEvent::Focused(false) if window.label() == panel::LABEL => panel::on_blur(window.app_handle()),
+            WindowEvent::Moved(at) if window.label() == panel::LABEL => panel::on_moved(window.app_handle(), *at),
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();

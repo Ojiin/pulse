@@ -217,6 +217,11 @@ fn toggle_autostart(app: &AppHandle, item: &CheckMenuItem<Wry>) {
 }
 
 // left click opens and closes the panel; right click shows a small menu
+// where the item is, to open the panel below it without a click on it
+pub fn rect(app: &AppHandle) -> Option<tauri::Rect> {
+    app.tray_by_id(ID)?.rect().ok().flatten()
+}
+
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let autostart = CheckMenuItem::with_id(app, "autostart", "Start at login", true, autostart_enabled(app), None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Pulse", true, None::<&str>)?;

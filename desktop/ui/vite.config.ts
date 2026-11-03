@@ -7,5 +7,6 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   build: { outDir: 'dist', emptyOutDir: true },
-  server: { port: 5199, strictPort: true },
+  // the app icons in ../assets are shown in the foot of the panel
+  server: { port: 5199, strictPort: true, fs: { allow: ['..'] } },
 })

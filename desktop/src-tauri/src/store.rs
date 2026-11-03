@@ -68,6 +68,9 @@ pub struct Store {
     pub parked: HashMap<String, Parked>,
     // taken up again in the panel while the session's last answer still says parked
     pub resumed: HashMap<String, f64>,
+    // where the person moved the panel (its top left, in pixels of the screen);
+    // none: below the menu bar item
+    pub panel_at: Option<[i32; 2]>,
 }
 
 pub static STORE: LazyLock<Mutex<Store>> = LazyLock::new(|| Mutex::new(load().unwrap_or_default()));
