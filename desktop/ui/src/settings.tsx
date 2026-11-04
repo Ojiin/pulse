@@ -103,10 +103,16 @@ export function SettingsView({ onDone }: { onDone: () => void }) {
       {onWindows() && (
         <div className="st-row">
           <span className="st-label">Taskbar</span>
-          <label className="st-check">
-            <input type="checkbox" checked={settings.taskbar} onChange={e => save({ ...settings, taskbar: e.target.checked })} />
-            Show the counts
-          </label>
+          <span className="st-checks">
+            <label className="st-check">
+              <input type="checkbox" checked={settings.taskbar} onChange={e => save({ ...settings, taskbar: e.target.checked })} />
+              Show the counts
+            </label>
+            <label className="st-check">
+              <input type="checkbox" checked={settings.taskbarRunning} disabled={!settings.taskbar} onChange={e => save({ ...settings, taskbarRunning: e.target.checked })} />
+              with what is running now
+            </label>
+          </span>
         </div>
       )}
 

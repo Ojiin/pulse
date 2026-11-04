@@ -876,6 +876,13 @@ button {
   align-items: center;
   gap: 6px;
 }
+/* two choices beside one label, one above the other */
+.st-checks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
 
 /* a command worth a look */
 .flag {

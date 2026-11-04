@@ -70,11 +70,12 @@ const BUTTONS_EVERY: Duration = Duration::from_secs(5);
 // what the other threads tell this one
 struct Shared {
     on: bool,
+    // what runs shows too (settings.taskbar_running)
+    running: bool,
     counts: Counts,
-    tip: String,
 }
 
-static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { on: false, counts: Counts::default(), tip: "Pulse".to_string() }));
+static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { on: false, running: false, counts: Counts::default() }));
 // the strip's window, once made; the taskbar and the tray as last found, for
 // the hook that hears them move; the message Explorer sends when it starts anew
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
@@ -86,25 +87,25 @@ static LOOK_ASKED: AtomicBool = AtomicBool::new(false);
 // the colours changed: read at the next look
 static RETHEME: AtomicBool = AtomicBool::new(false);
 
-pub fn start(app: AppHandle, on: bool) {
-    SHARED.lock().expect("taskbar").on = on;
+pub fn start(app: AppHandle, on: bool, running: bool) {
+    set_on(on, running);
     if let Err(error) = std::thread::Builder::new().name("taskbar".into()).spawn(move || run(app)) {
         eprintln!("taskbar: {error}");
     }
 }
 
-// new counts, with the tray's tooltip that names them
-pub fn show(counts: &Counts, tip: &str) {
-    {
-        let mut shared = SHARED.lock().expect("taskbar");
-        shared.counts = counts.clone();
-        shared.tip = tip.to_string();
-    }
+// new counts
+pub fn show(counts: &Counts) {
+    SHARED.lock().expect("taskbar").counts = counts.clone();
     ask_look();
 }
 
-pub fn set_on(on: bool) {
-    SHARED.lock().expect("taskbar").on = on;
+pub fn set_on(on: bool, running: bool) {
+    {
+        let mut shared = SHARED.lock().expect("taskbar");
+        shared.on = on;
+        shared.running = running;
+    }
     ask_look();
 }
 
@@ -119,7 +120,7 @@ fn ask_look() {
 // colours
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
-    shown: [usize; 4],
+    shown: [usize; 5],
     dpi: u32,
     ink: [u8; 3],
     room: (i32, i32),
@@ -143,7 +144,7 @@ struct State {
     by_tray: Option<RECT>,
     buttons_at: Option<Instant>,
     failed: Option<String>,
-    drawn: Option<(Key, (i32, i32))>,
+    drawn: Option<Key>,
     // the last picture did not reach the window (said once)
     blank: bool,
     // where the strip is; None: hidden
@@ -293,15 +294,16 @@ fn update(s: &mut State, buttons: bool) {
     if RETHEME.swap(false, Ordering::SeqCst) {
         s.ink = ink();
     }
-    let (on, counts, tip) = {
+    let (on, running, counts) = {
         let shared = SHARED.lock().expect("taskbar");
-        (shared.on, shared.counts.clone(), shared.tip.clone())
+        (shared.on, shared.running, shared.counts.clone())
     };
+    // the tray's tooltip, and what runs named in it when it shows here
+    let tip = tray::tooltip(&counts, running);
     if tip != s.tip_text {
         set_tip(s, tip);
     }
-    let chips = tray::chips(&counts);
-    if !on || chips.is_empty() {
+    if !on || tray::chips(&counts, running).is_empty() {
         return hide(s);
     }
     let Some(bar) = find_bar(s) else { return hide(s) };
@@ -311,20 +313,12 @@ fn update(s: &mut State, buttons: bool) {
     let scale = bar.dpi as f64 / 96.0;
     let px = |at_100: f64| (at_100 * scale).round() as i32;
     let room = (bar.rect.right - bar.rect.left, bar.rect.bottom - bar.rect.top);
-    let key = Key { shown: [counts.blocked, counts.waiting, counts.review, counts.commands], dpi: bar.dpi, ink: s.ink, room };
-    let picture = match s.drawn {
-        Some((drawn, _)) if drawn == key => None,
-        _ => Some(picture(&chips, scale, s.ink, room)),
-    };
-    let size = match (&picture, s.drawn) {
-        (Some(p), _) => (p.w, p.h),
-        (None, Some((_, size))) => size,
-        (None, None) => return hide(s),
-    };
     let end = s.by_tray.map_or(bar.tray, |by| union(bar.tray, by));
-    let Some((x, y)) = place(bar.rect, end, &s.busy, size, px(MARGIN), px(SLACK)) else { return hide(s) };
-    if let Some(picture) = picture {
-        if !upload(s.window, &picture, x, y) {
+    let at = |chips: &[Chip]| place(bar.rect, end, &s.busy, layout(tray::width(chips), scale, room).size(), px(MARGIN), px(SLACK));
+    let Some((chips, runs, (x, y))) = fitting(&counts, running, at) else { return hide(s) };
+    let key = Key { shown: [counts.blocked, counts.waiting, counts.review, counts.commands, runs], dpi: bar.dpi, ink: s.ink, room };
+    if s.drawn != Some(key) {
+        if !upload(s.window, &picture(&chips, scale, s.ink, room), x, y) {
             // drawn again at the next look
             s.drawn = None;
             if !s.blank {
@@ -334,7 +328,7 @@ fn update(s: &mut State, buttons: bool) {
             return hide(s);
         }
         s.blank = false;
-        s.drawn = Some((key, size));
+        s.drawn = Some(key);
     } else if s.placed != Some((x, y)) {
         unsafe { SetWindowPos(s.window, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE) };
     }
@@ -347,6 +341,22 @@ fn update(s: &mut State, buttons: bool) {
         raise(s);
     }
     s.placed = Some((x, y));
+}
+
+// the chips by the tray and where they go: all of them, or when only the open
+// states have room, those alone, as what runs needs the person least; with
+// how many run among them. None: not even those have room
+fn fitting(counts: &Counts, running: bool, at: impl Fn(&[Chip]) -> Option<(i32, i32)>) -> Option<(Vec<Chip>, usize, (i32, i32))> {
+    let all = tray::chips(counts, running);
+    let runs = if running { counts.running } else { 0 };
+    match at(&all) {
+        Some(xy) if !all.is_empty() => Some((all, runs, xy)),
+        None if runs > 0 => {
+            let open = tray::chips(counts, false);
+            at(&open).filter(|_| !open.is_empty()).map(|xy| (open, 0, xy))
+        }
+        _ => None,
+    }
 }
 
 fn hide(s: &mut State) {
@@ -656,18 +666,37 @@ struct Picture {
     h: i32,
 }
 
-// the strip at the taskbar's scale, with room around it that a click finds
-// too: nearly clear, as a clear pixel would let the click through. Across a
-// taskbar (`room`: its width and height) too thin for strip and room, the
-// room is less
-fn picture(chips: &[Chip], scale: f64, ink: [u8; 3], (room_w, room_h): (i32, i32)) -> Picture {
-    let (rgba, width) = tray::strip(chips, Some(ink));
+// a strip `width` wide (tray::HEIGHT high) at the taskbar's scale: its size,
+// and the room around it that a click finds too. Across a taskbar (`room`: its
+// width and height) too thin for strip and room, the room is less
+struct Layout {
+    w: usize,
+    h: usize,
+    pad_x: usize,
+    pad_y: usize,
+}
+
+impl Layout {
+    // the window's size
+    fn size(&self) -> (i32, i32) {
+        ((self.w + 2 * self.pad_x) as i32, (self.h + 2 * self.pad_y) as i32)
+    }
+}
+
+fn layout(width: usize, scale: f64, (room_w, room_h): (i32, i32)) -> Layout {
     let h = ((STRIP * scale).round() as usize).max(1);
     let w = ((width * h + tray::HEIGHT / 2) / tray::HEIGHT).max(1);
-    let small = shrink(&rgba, width, tray::HEIGHT, w, h);
     let pad = (PAD * scale).round() as usize;
     let fit = |room: i32, size: usize| pad.min((room.max(0) as usize).saturating_sub(size) / 2);
-    let (pad_x, pad_y) = (fit(room_w, w), fit(room_h, h));
+    Layout { w, h, pad_x: fit(room_w, w), pad_y: fit(room_h, h) }
+}
+
+// the strip as laid out (layout), the room around it nearly clear, as a clear
+// pixel would let the click through
+fn picture(chips: &[Chip], scale: f64, ink: [u8; 3], room: (i32, i32)) -> Picture {
+    let (rgba, width) = tray::strip(chips, Some(ink));
+    let Layout { w, h, pad_x, pad_y } = layout(width, scale, room);
+    let small = shrink(&rgba, width, tray::HEIGHT, w, h);
     let (pw, ph) = (w + 2 * pad_x, h + 2 * pad_y);
     let mut bgra = [0, 0, 0, 1].repeat(pw * ph);
     for y in 0..h {
@@ -866,10 +895,12 @@ mod tests {
         // red, opaque: blue first
         assert_eq!(shrink(&[255, 0, 0, 255], 1, 1, 1, 1), vec![0, 0, 255, 255]);
         let counts = Counts { blocked: 2, waiting: 1, ..Counts::default() };
-        let chips = tray::chips(&counts);
+        let chips = tray::chips(&counts, false);
         let (_, width) = tray::strip(&chips, Some(INK_ON_DARK));
         let p = picture(&chips, 1.0, INK_ON_DARK, (2560, 48));
         assert_eq!((p.w, p.h), ((width as i32 + 1) / 2 + 12, 30));
+        // the size placed is the size drawn
+        assert_eq!(layout(tray::width(&chips), 1.0, (2560, 48)).size(), (p.w, p.h));
         // nearly clear around the strip, and never more colour than cover
         assert_eq!(&p.bgra[..4], &[0, 0, 0, 1]);
         assert!(p.bgra.chunks(4).all(|px| px[..3].iter().all(|&c| c <= px[3])));
@@ -882,8 +913,31 @@ mod tests {
     }
 
     #[test]
+    fn without_room_for_what_runs_the_open_states_stay() {
+        let counts = Counts { waiting: 1, review: 3, running: 1, ..Counts::default() };
+        let size = |chips: &[Chip]| layout(tray::width(chips), 1.0, (2560, 48)).size();
+        let by = |busy: Vec<RECT>| move |chips: &[Chip]| place(bar(), tray(), &busy, size(chips), 8, 44);
+        let shown = |found: Option<(Vec<Chip>, usize, (i32, i32))>| found.map(|(chips, runs, at)| (chips.len(), runs, at));
+        // the buttons up to where the open states just fit
+        let open = size(&tray::chips(&counts, false)).0;
+        let near = 2270 - 2 * 8 - 44 - open;
+        assert_eq!(shown(fitting(&counts, true, by(buttons(near)))), Some((2, 0, (2262 - open, 1401))));
+        // with room for all, what runs shows too, last
+        let all = size(&tray::chips(&counts, true)).0;
+        assert_eq!(shown(fitting(&counts, true, by(buttons(near - (all - open))))), Some((3, 1, (2262 - all, 1401))));
+        // not asked for: the open states alone, as before
+        assert_eq!(shown(fitting(&counts, false, by(buttons(near)))), Some((2, 0, (2262 - open, 1401))));
+        // what runs alone: with room, a strip of it; without, none, though
+        // there is room for a strip of nothing
+        let alone = Counts { running: 2, ..Counts::default() };
+        assert_eq!(shown(fitting(&alone, true, by(Vec::new()))), Some((1, 2, (2262 - size(&tray::chips(&alone, true)).0, 1401))));
+        assert_eq!(shown(fitting(&alone, true, by(buttons(2270 - 2 * 8 - 44 - size(&[]).0)))), None);
+        assert_eq!(shown(fitting(&Counts::default(), true, by(Vec::new()))), None);
+    }
+
+    #[test]
     fn the_digits_take_the_taskbar_colour_and_the_symbols_keep_theirs() {
-        let chips = tray::chips(&Counts { blocked: 2, review: 13, ..Counts::default() });
+        let chips = tray::chips(&Counts { blocked: 2, review: 13, running: 4, ..Counts::default() }, true);
         let (own, _) = tray::strip(&chips, None);
         let (inked, _) = tray::strip(&chips, Some([1, 2, 3]));
         let drawn = || own.chunks(4).zip(inked.chunks(4)).filter(|(_, px)| px[3] > 0);

@@ -339,7 +339,7 @@ fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> 
     settings::save(&settings)?;
     panel::set_appearance(&app, settings.appearance);
     #[cfg(windows)]
-    taskbar::set_on(settings.taskbar);
+    taskbar::set_on(settings.taskbar, settings.taskbar_running);
     {
         let mut store = STORE.lock().expect("store");
         notify::rebase(&mut store, &settings, now_ms());
@@ -433,7 +433,10 @@ fn main() {
             panel::set_appearance(&handle, SETTINGS.lock().expect("settings").0.appearance);
             tray::build(&handle)?;
             #[cfg(windows)]
-            taskbar::start(handle.clone(), SETTINGS.lock().expect("settings").0.taskbar);
+            {
+                let settings = SETTINGS.lock().expect("settings").0.clone();
+                taskbar::start(handle.clone(), settings.taskbar, settings.taskbar_running);
+            }
             watch::start(handle.clone(), refresh)?;
             std::thread::spawn(move || refresh(&handle));
             Ok(())

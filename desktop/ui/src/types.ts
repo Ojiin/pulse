@@ -99,5 +99,6 @@ export type Settings = {
   parkedWeekly: boolean
   appearance: Appearance
   taskbar: boolean
+  taskbarRunning: boolean
 }
 export type Appearance = 'system' | 'light' | 'dark'

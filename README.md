@@ -39,7 +39,9 @@ count, the digits in the taskbar's text colour; a click on it opens the panel.
 Windows 11 has no taskbar toolbars, so the strip is a small window of Pulse's
 above the taskbar. It keeps clear of the taskbar's buttons, and hides when there
 is no room, when a full-screen window is in front or when the taskbar slides
-away. *Settings → Taskbar* turns it off.
+away. *Settings → Taskbar* turns it off, or adds what is running now: the
+panel's blue spinner with the count of running sessions, the first to go
+when room is short.
 On Windows Pulse reads:
 
 - the Claude app's sessions under `%LOCALAPPDATA%\Claude-Data\<package>` (the

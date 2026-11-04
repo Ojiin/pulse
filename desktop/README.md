@@ -11,7 +11,7 @@ the notification area (the tray), and the panel opens by the taskbar; see
 
 - **Menu bar:** one coloured symbol per open state with its count (blocked,
   question, result to look at) and a teal hourglass for commands worth a look,
-  a grey check when nothing needs you. What runs shows only in the panel. The image is drawn only when a count changes.
+  a grey check when nothing needs you. What runs shows only in the panel and, if asked, on the Windows taskbar. The image is drawn only when a count changes.
 - **Panel** (left click on the item; it closes on a click elsewhere unless it
   is pinned; dragged by its head, pinned or not, it opens where it was put,
   until the turning arrow beside the gear takes it back to its place by the item,
@@ -91,7 +91,9 @@ the notification area (the tray), and the panel opens by the taskbar; see
   foot of the panel follows it too: `assets/app-icon.svg` dark,
   `assets/app-icon-light.svg` light.
 - **Taskbar** (Windows), also under the gear: the menu bar's strip of counts on
-  the taskbar beside the tray, on by default (`src-tauri/src/taskbar.rs`).
+  the taskbar beside the tray, on by default (`src-tauri/src/taskbar.rs`); a
+  second box adds what is running now with its count, off by default and the
+  first to go when room is short.
 - Right click on the item: start at login, quit.
 
 ## An item's life
