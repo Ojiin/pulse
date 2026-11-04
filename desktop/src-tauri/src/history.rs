@@ -49,7 +49,8 @@ pub fn history(input: &Inputs, items: &[Item]) -> Vec<Entry> {
                 (None, None, None) => s.task_id.as_deref().map(clean_name).unwrap_or_else(|| s.id.clone()),
             };
             let folder = s.origin_cwd.as_deref().or(s.cwd.as_deref()).or(task.and_then(|t| t.cwd.as_deref())).unwrap_or("");
-            let status = record.and_then(|r| r.turns.iter().rev().find_map(|t| t.status_text.clone()));
+            // what the run's last turn said: an earlier turn's sentence is out of date
+            let status = record.and_then(|r| r.turns.last()).and_then(|t| t.status_text.clone());
             // a chat's last answer, read from its transcript (cached by size)
             let said = || {
                 let cli = s.cli_id.as_deref()?;
@@ -80,8 +81,11 @@ pub fn history(input: &Inputs, items: &[Item]) -> Vec<Entry> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::inputs::Session;
+    use crate::runs::{RunRecord, Turn};
 
     #[test]
     fn newest_first_archived_too_and_what_the_app_said() {
@@ -94,5 +98,23 @@ mod tests {
         assert_eq!(list.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), vec!["b", "a"]);
         assert_eq!((list[0].kind, list[0].project.as_str()), (Kind::Recurring, "website"));
         assert_eq!((list[1].archived, list[1].said.as_str(), list[1].stage), (true, "PR #12 gemergt", Stage::Done));
+    }
+
+    #[test]
+    fn a_run_says_what_its_last_turn_said_or_what_the_app_did() {
+        let mut input = Inputs::empty(1_000.0);
+        let mut run = Session { id: "r".into(), cli_id: Some("c".into()), task_id: Some("ops".into()), last_activity: Some(900.0), ..Default::default() };
+        run.summary.detail = "App-Zusammenfassung".into();
+        input.sessions = vec![run];
+        let turn = |by: &str, status: &str, text: Option<&str>| Turn { by: by.into(), status: Some(status.into()), status_text: text.map(Into::into), ..Default::default() };
+        let record = |last: Turn| Arc::new(RunRecord { session_id: "c".into(), task_id: "ops".into(), turns: vec![turn("routine", "waiting", Some("Soll ich die Dateien löschen?")), last], ..Default::default() });
+        // the question was answered; the run is blocked now and said no sentence
+        input.records = vec![record(turn("user", "blocked", None))];
+        assert_eq!(history(&input, &[])[0].said, "App-Zusammenfassung");
+        // the person wrote again and the run has set no state since
+        input.records = vec![record(Turn { by: "user".into(), ..Default::default() })];
+        assert_eq!(history(&input, &[])[0].said, "App-Zusammenfassung");
+        input.records = vec![record(turn("user", "worked", Some("Gelöscht.")))];
+        assert_eq!(history(&input, &[])[0].said, "Gelöscht.");
     }
 }

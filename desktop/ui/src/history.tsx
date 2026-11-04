@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getHistory, mark, openChat } from './api'
+import { getHistory, mark, openChat, resumeChat } from './api'
 import { clock, dayName, dayOf } from './format'
 import { Disc, Glyph, markOf, typeOf } from './glyphs'
 import { appOf, Card, Where } from './parts'
@@ -105,7 +105,7 @@ export function HistoryTab({ version, now }: { version: number; now: number }) {
           {lines.map(({ entry: e, count }) => (
             <div key={e.id} className={`row ${e.archived ? 'dim' : ''}`} title={`${e.title}\n${e.said}\nOpen in ${appOf(e.id)}`} onClick={() => void openChat(e.id)}>
               <Disc mark={markOf(e)} type={typeOf(e)} />
-              <b className="title">
+              <b className="title" dir="auto">
                 {e.title}
                 {count > 1 ? ` ×${count}` : ''}
               </b>
@@ -115,10 +115,10 @@ export function HistoryTab({ version, now }: { version: number; now: number }) {
                   <span className="acts">
                     <button
                       className="act"
-                      title={e.stage === 'parked' ? 'Resume: open in Claude' : 'Park: keep it in mind'}
+                      title={e.stage === 'parked' ? `Resume: open in ${appOf(e.id)}` : 'Park: keep it in mind'}
                       onClick={ev => {
                         ev.stopPropagation()
-                        if (e.stage === 'parked') void mark([e.id], 'resume').then(() => openChat(e.id))
+                        if (e.stage === 'parked') void resumeChat(e.id)
                         else void mark([e.id], 'park')
                       }}
                     >
@@ -130,7 +130,7 @@ export function HistoryTab({ version, now }: { version: number; now: number }) {
               <Where project={e.project} from={parents.get(e.parentId ?? '')} id={e.id}>
                 {(e.stage === 'parked' || e.archived || e.stage === 'running') && <span className="from">{e.stage === 'parked' ? 'parked' : e.stage === 'running' ? 'running' : 'archived'}</span>}
               </Where>
-              {e.said && <p>{e.said}</p>}
+              {e.said && <p dir="auto">{e.said}</p>}
             </div>
           ))}
         </Card>

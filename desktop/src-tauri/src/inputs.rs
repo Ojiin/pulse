@@ -236,6 +236,12 @@ fn read_app(p: &Paths, inputs: &mut Inputs) -> std::io::Result<()> {
     Ok(())
 }
 
+// a command of the session's own in the foreground: one the transcript does
+// not name as background work, nor left running by a call that returned
+fn in_the_foreground(commands: &[Command], cli_id: &str, names: &HashMap<String, String>) -> bool {
+    commands.iter().any(|c| c.session == cli_id && !c.left && !names.contains_key(&c.id))
+}
+
 pub fn load_inputs() -> Result<Inputs, String> {
     let p = paths()?;
     let now = now_ms();
@@ -271,8 +277,7 @@ pub fn load_inputs() -> Result<Inputs, String> {
         // what runs in the background is open while its process runs, however old
         let alive: HashSet<&str> = inputs.commands.iter().filter(|c| &c.session == cli_id).map(|c| c.id.as_str()).collect();
         let background = background_of(&path, now, &alive);
-        // a command of its own in the foreground: one the transcript does not name as background work
-        let has_process = alive.iter().any(|id| !background.names.contains_key(*id));
+        let has_process = in_the_foreground(&inputs.commands, cli_id, &background.names);
         if !alive.is_empty() {
             inputs.names.insert(cli_id.clone(), background.names);
             inputs.written.insert(cli_id.clone(), std::fs::metadata(&path).map(|m| mtime_ms(&m)).unwrap_or(0.0));
@@ -341,4 +346,22 @@ pub fn load_inputs() -> Result<Inputs, String> {
     // the Codex app's threads, after the dots: it keeps its own read state
     crate::codex::read(&p.codex, &mut inputs);
     Ok(inputs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // what keeps a shell call from showing as waiting for approval: a command
+    // of the session's own in the foreground, not one in the background nor
+    // one a call left running as it returned
+    #[test]
+    fn only_a_command_in_the_foreground_is_waited_for() {
+        let cli = "7e3c51a2-0b4d-4c8e-9f61-2a5d8b0c4e17";
+        let command = |id: &str, left: bool| Command { session: cli.into(), id: id.into(), started: 0.0, last_output: 0.0, cpu: 0.0, hot_since: None, memory: 0, ports: vec![], left };
+        let names = HashMap::from([("dev".to_string(), "pnpm dev".to_string())]);
+        assert!(in_the_foreground(&[command("dev", false), command("tests", false)], cli, &names));
+        assert!(!in_the_foreground(&[command("dev", false), command("server", true)], cli, &names));
+        assert!(!in_the_foreground(&[command("tests", false)], "00000000-0000-4000-8000-000000000000", &names));
+    }
 }

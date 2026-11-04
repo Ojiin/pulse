@@ -12,7 +12,8 @@ https://github.com/user-attachments/assets/b85c4ad9-4e7a-4367-b419-6594073a9225
   nothing needs you.
 - **Panel:** *Open* (what runs now, then what needs you, oldest first),
   *Timeline* (today, what comes, what was missed) and *History* (every
-  session, searchable). A click opens the session in Claude.
+  session, searchable). A click opens the session in its app (Claude, or Codex
+  for a Codex thread).
 - **Commands to check:** background commands that run long, run hot, hang or
   were forgotten.
 - **Notifications** for what newly needs you and reminders while it lies,
@@ -30,24 +31,44 @@ It has two parts:
 ## Windows and Codex
 
 Pulse also runs on Windows 10/11, where it sits in the notification area (the
-tray) and its panel opens above the taskbar. The tray shows one square: the most
-urgent state's symbol with a badge of everything open; the tooltip names each.
+tray) and its panel opens by the taskbar. The tray shows one square: the most
+urgent state's symbol with a badge of everything open; the tooltip names each
+count (for example "Pulse: 1 blocked, 2 questions").
 On Windows Pulse reads:
 
 - the Claude app's sessions under `%LOCALAPPDATA%\Claude-Data\<package>` (the
-  Store app) or `%APPDATA%\Claude` (the classic installer);
+  packaged app, the download and the Store build alike) or `%APPDATA%\Claude`
+  (the old installer); when more than one holds sessions, Pulse reads the one
+  written to last when it starts and stays with it, so after a switch to
+  another build of Claude, quit and start Pulse again;
+- the transcripts and the plugin's records under `%USERPROFILE%\.claude`;
 - the commands sessions run, from the processes that hold their
-  `%TEMP%\claude\…\tasks\<id>.output` open (through the Restart Manager);
+  `%TEMP%\claude\…\tasks\<id>.output` (or the same under `CLAUDE_CODE_TMPDIR`
+  or `%TMP%`) open, as the file system names them;
 - its own state in `%APPDATA%\local.claude-dashboard.pulse`.
 
-**Codex.** Pulse shows the threads of the Codex app (desktop or CLI) beside
-Claude's sessions, marked *Codex*: their titles, folders, archive and read state
-from `~/.codex/state_5.sqlite`, and from each thread's rollout in
-`~/.codex/sessions` whether a turn runs now, its last tool and its last answer.
+Pulse reads `CLAUDE_CODE_TMPDIR`, `TEMP` and `TMP` from its own environment, so
+the commands of a Claude Code started with a different temp folder (set only in
+its shell, or in Claude Code's settings) are not seen.
+
+**Codex**, on macOS and Windows alike: Pulse shows the threads of the Codex app
+(desktop or CLI) beside
+Claude's sessions, marked *Codex*: their titles, folders, archive and (for the
+app's threads) read state from `~/.codex/state_5.sqlite`, and from each thread's rollout in
+`~/.codex/sessions` whether a turn runs now, its last tool and its last answer
+(`~/.codex` is `%USERPROFILE%\.codex` on Windows, or wherever `CODEX_HOME` points).
+Codex compresses the rollout of a thread idle for some days to
+`rollout-….jsonl.zst`; Pulse reads that file as it reads the plain one. A
+thread in a Codex project shows the project's name; a chat the Codex app
+started outside any project, in a folder of its own under
+`Documents\Codex\<date>` (on Windows also when Documents was moved or is in
+OneDrive), shows no project.
 A click opens the thread in Codex (`codex://threads/<id>`). Only threads you
 started in the Codex app or CLI count, not subagents, reviews or threads another
-tool drives through Codex. A finished turn is a result to read; one
-whose answer ends in a question asks you something. For the same states as a
+tool drives through Codex. A finished turn in the Codex app is a result to
+read until you open the thread there; in the CLI you read the answer in the
+terminal, so it counts as done at once. An answer that ends in a question asks
+you something, in the app or the CLI. For the same states as a
 Claude session (waiting, blocked, parked), ask Codex for a STATUS line in
 `~/.codex/AGENTS.md`:
 
@@ -105,6 +126,13 @@ or open it, then allow it under System Settings → Privacy & Security → *Open
 Anyway*. Pulse lives in the menu bar (no Dock icon); a right click on its
 symbol turns on *Start at login*.
 
+On Windows, download `Pulse_<version>_x64-setup.exe` from the same release and
+run it. It is not signed either, so SmartScreen says *Windows protected your
+PC*: click *More info*, then *Run anyway*. It installs for your user under
+`%LOCALAPPDATA%` without admin rights, and fetches the WebView2 runtime if it is
+missing. Pulse then lives in the tray; a right click on it turns on *Start at
+login*.
+
 ### Or build it yourself
 
 You need Rust 1.90 or later (the toolchain is pinned in
@@ -129,17 +157,27 @@ python3 -I tools/backfill_runs.py --dry-run
 python3 -I tools/backfill_runs.py
 ```
 
+On Windows, if `python3` is missing or only the Microsoft Store placeholder,
+run `py -3 -I tools/backfill_runs.py --dry-run`, then the same without
+`--dry-run`.
+
 ## What it reads and writes
 
 Everything stays on your computer; neither Pulse nor the plugin sends anything
 anywhere.
 
 - **Reads:** the Claude desktop app's sessions and scheduled tasks
-  (`~/Library/Application Support/Claude/claude-code-sessions`), a copy of its
-  unread markers, the transcripts in `~/.claude/projects`, the plugin's records
-  and the process table (for the commands sessions run).
+  (`~/Library/Application Support/Claude/claude-code-sessions`; on Windows see
+  [Windows and Codex](#windows-and-codex)), a copy of its
+  unread markers, the transcripts in `~/.claude/projects`, the plugin's records,
+  the Codex threads in `~/.codex/state_5.sqlite` and `~/.codex/sessions` (or
+  `CODEX_HOME`) and the process table (for the commands sessions run; on Windows
+  the `claude` output files under `CLAUDE_CODE_TMPDIR`, `%TEMP%` and `%TMP%`
+  instead).
 - **Writes:** its own state and settings in
-  `~/Library/Application Support/local.claude-dashboard.pulse/`; the plugin
+  `~/Library/Application Support/local.claude-dashboard.pulse/` (Windows:
+  `%APPDATA%\local.claude-dashboard.pulse`, and the panel's WebView2 profile in
+  `%LOCALAPPDATA%\local.claude-dashboard.pulse`); the plugin
   writes its records to `~/.claude/routine-recorder/runs`.
 
 Pulse reads files of the Claude desktop app that are not a documented
@@ -148,17 +186,29 @@ adapted.
 
 ## Uninstall
 
-Quit Pulse from its menu bar symbol (right click → *Quit Pulse*), delete
+Turn off *Start at login* and quit Pulse from its menu bar symbol (right
+click → *Start at login*, then *Quit Pulse*), then delete
 `/Applications/Pulse.app` and
-`~/Library/Application Support/local.claude-dashboard.pulse`. Remove the plugin
+`~/Library/Application Support/local.claude-dashboard.pulse` (and
+`~/Library/LaunchAgents/Pulse.plist`, if Pulse was left to start at login).
+Remove the plugin
 with `claude plugin uninstall routine-recorder@pulse`, and its records
 with `~/.claude/routine-recorder` if you like.
+
+On Windows, quit Pulse from its tray icon (right click → *Quit Pulse*),
+uninstall it under Settings → Apps → Installed apps (Windows 10: Apps &
+features) → *Pulse*, which also removes *Start at login*, and tick *Delete the
+application data*, which removes both
+`%APPDATA%\local.claude-dashboard.pulse` and
+`%LOCALAPPDATA%\local.claude-dashboard.pulse` (the WebView2 profile); or delete
+both folders yourself. The plugin goes as above.
 
 ## Development
 
 How Pulse works, what each state means and how to build and test it:
 [`desktop/README.md`](desktop/README.md). The plugin's tests run with
-`claude plugin test routine-recorder`; Pulse's with `npm test` in `desktop`.
+`claude plugin test routine-recorder`; Pulse's with `npm test` in `desktop`,
+and the panel's type check with `npm --prefix ui run typecheck` there.
 
 ## License
 

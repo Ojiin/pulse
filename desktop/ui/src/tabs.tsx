@@ -119,7 +119,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
           {e.item && <Disc small mark={markOf(e.item)} />}
           <span className="t1">
             {e.item ? type(e.item) : type(e)}
-            <b>
+            <b dir="auto">
               {e.title}
               {e.count > 1 ? ` ×${e.count}` : ''}
             </b>
@@ -133,7 +133,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
           <Disc small mark="running" />
           <span className="t1">
             {type(i)}
-            <b>{i.title}</b>
+            <b dir="auto">{i.title}</b>
           </span>
           <span className="r">running</span>
         </div>
@@ -152,7 +152,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
                 <Glyph name="planned" size={15} className="s-muted" />
                 <span className="t1">
                   {type(p)}
-                  <b>{p.title}</b>
+                  <b dir="auto">{p.title}</b>
                 </span>
                 <span className="r">{p.count > 1 ? `×${p.count} until ${clock(p.last)}` : d === dayOf(now) ? until(p.at, now) : p.kind === 'oneoff' ? 'once' : ''}</span>
               </div>
@@ -168,7 +168,7 @@ export function TimelineTab({ snap, now }: { snap: Snapshot; now: number }) {
               <Glyph name="missed" size={15} className="s-muted" />
               <span className="t1">
                 {type({ kind: 'recurring' })}
-                <b>{m.title}</b>
+                <b dir="auto">{m.title}</b>
               </span>
               <span className="r">{dayName(m.at, now)}</span>
             </div>

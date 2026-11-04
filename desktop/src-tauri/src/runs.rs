@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 
 use crate::cron::{HOUR, MINUTE};
+use crate::said::bare;
 
 #[derive(Deserialize, Default, Clone)]
 #[serde(default)]
@@ -109,7 +110,8 @@ pub fn last_line(text: Option<&str>) -> String {
             in_fence = !in_fence;
             continue;
         }
-        let upper = t.to_uppercase();
+        // a STATUS or PING line, plain, set in markdown, or as a comment or reference
+        let upper = bare(t).to_uppercase();
         if !in_fence && !t.is_empty() && !upper.starts_with("STATUS:") && !upper.starts_with("PING:") {
             prose.push(t);
         }
@@ -165,7 +167,14 @@ pub fn run_state(
     let (state, summary_text) = if is_running || is_live_turn {
         (RunState::Running, last_line(tail))
     } else if let Some(said) = last.and_then(|t| t.status.as_deref()).and_then(RunState::from_status) {
-        let text = last.and_then(|t| t.status_text.clone()).unwrap_or_else(|| last_line(tail));
+        let mut text = last.and_then(|t| t.status_text.clone()).unwrap_or_else(|| last_line(tail));
+        // no sentence and no closing words: what the app noted, as below
+        if text.is_empty() && matches!(said, RunState::Waiting | RunState::Blocked) {
+            text = summary.needs_action.clone();
+        }
+        if text.is_empty() {
+            text = summary.detail.clone();
+        }
         (said, text)
     } else {
         // the app files idle runs under review_ready too, and calls a chat that
@@ -266,5 +275,35 @@ mod tests {
         assert!(asked.starts_with("… "));
         let tail = last_line(Some("Der Lauf hat 0 Einträge.\n\nWillst du ihn dauerhaft überspringen, trag ihn in die State-Datei ein."));
         assert_eq!(tail, "Willst du ihn dauerhaft überspringen, trag ihn in die State-Datei ein.");
+    }
+
+    #[test]
+    fn the_closing_words_skip_a_status_or_ping_line_in_any_form() {
+        assert_eq!(last_line(Some("Fertig.\n\nSTATUS: idle")), "Fertig.");
+        assert_eq!(last_line(Some("Konnte nicht.\n\n<!-- STATUS: blocked -->")), "Konnte nicht.");
+        assert_eq!(last_line(Some("Erledigt.\n\n[//]: # (STATUS: blocked)")), "Erledigt.");
+        assert_eq!(last_line(Some("Fertig.\n\n**STATUS: idle**")), "Fertig.");
+        // the recorder reads the word in any case
+        assert_eq!(last_line(Some("Konnte nicht.\n\n<!-- status: blocked -->")), "Konnte nicht.");
+        assert_eq!(last_line(Some("Gesendet.\n\n<!-- PING: Push an mich (Handy) -->\n<!-- STATUS: worked -->")), "Gesendet.");
+        assert_eq!(last_line(Some("Gesendet.\n\n**PING: Push an mich**\nSTATUS: worked")), "Gesendet.");
+        // a state set without a sentence shows the closing words
+        let blocked = Turn { status: Some("blocked".into()), answer_tail: Some("Konnte nicht.\n\n<!-- STATUS: blocked -->".into()), ..turn() };
+        assert_eq!(run_state(Some(&record(vec![blocked])), &Summary::default(), None, None, false, NOW).summary, "Konnte nicht.");
+    }
+
+    #[test]
+    fn a_state_set_with_no_words_shows_what_the_app_noted() {
+        let noted = Summary { detail: "Asked for SSH access".into(), ..blocked_summary("SSH erlauben") };
+        let said = |status: &str, tail: &str| {
+            let last = Turn { status: Some(status.into()), answer_tail: Some(tail.into()), ..turn() };
+            run_state(Some(&record(vec![last])), &noted, None, None, false, NOW).summary
+        };
+        assert_eq!(said("blocked", "STATUS: blocked"), "SSH erlauben");
+        assert_eq!(said("waiting", "<!-- STATUS: waiting -->"), "SSH erlauben");
+        // a run that says it is done asks nothing
+        assert_eq!(said("worked", "STATUS: worked"), "Asked for SSH access");
+        // Claude's own closing words still come first
+        assert_eq!(said("blocked", "Konnte nicht.\n\nSTATUS: blocked"), "Konnte nicht.");
     }
 }

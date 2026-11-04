@@ -129,7 +129,14 @@ const PARK_GRACE_MS: f64 = 60_000.0;
 
 // the project a folder belongs to: a worktree counts to its repository
 pub fn project_of(path: &str) -> String {
-    let root = path.split("/.claude/worktrees/").next().unwrap_or(path).trim_end_matches('/');
+    project_in(path, cfg!(windows))
+}
+
+// on Windows a folder's names are parted by backslashes too; elsewhere a
+// backslash belongs to the name
+fn project_in(path: &str, windows: bool) -> String {
+    let path = if windows { path.replace('\\', "/") } else { path.to_string() };
+    let root = path.split("/.claude/worktrees/").next().unwrap_or(&path).trim_end_matches('/');
     root.rsplit('/').next().filter(|n| !n.is_empty()).unwrap_or(root).to_string()
 }
 
@@ -431,6 +438,21 @@ mod tests {
         assert_eq!(clean_name("Newsletter-Digest (täglich 08:30)"), "Newsletter-Digest");
         assert_eq!(project_of("/Users/x/Work/shop-api/.claude/worktrees/bold-x"), "shop-api");
         assert_eq!(project_of("/Users/x/Work/shop-web"), "shop-web");
+        // a Windows folder, in either slash and mixed
+        assert_eq!(project_in(r"C:\Users\x\Work\shop-web", true), "shop-web");
+        assert_eq!(project_in(r"C:\Users\x\Work\shop-api\.claude\worktrees\bold-x", true), "shop-api");
+        assert_eq!(project_in("C:/Users/x/Work/shop-api/.claude/worktrees/bold-x", true), "shop-api");
+        assert_eq!(project_in(r"C:\Users\x\Work\shop-api\.claude/worktrees\bold-x", true), "shop-api");
+        assert_eq!(project_in(r"C:\Users\x\Work\shop-web\", true), "shop-web");
+        // on macOS a backslash is part of a folder's name
+        assert_eq!(project_in(r"/Users/x/Work/a\b", false), r"a\b");
+        assert_eq!(project_in(r"/Users/x/Work/proj\", false), r"proj\");
+        assert_eq!(project_in(r"/Users/x/Work/a\b/.claude/worktrees/bold-x", false), r"a\b");
+        if cfg!(windows) {
+            assert_eq!(project_of(r"C:\Users\x\Work\shop-web"), "shop-web");
+        } else {
+            assert_eq!(project_of(r"/Users/x/Work/a\b"), r"a\b");
+        }
     }
 
     #[test]

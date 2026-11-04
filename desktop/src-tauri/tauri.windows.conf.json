@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "app": {
-    "macOSPrivateApi": false,
     "windows": [
       {
         "label": "panel",
@@ -15,7 +14,7 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "shadow": true,
-        "windowEffects": { "effects": ["acrylic"] }
+        "windowEffects": { "effects": ["acrylic"], "color": [243, 243, 245, 200] }
       }
     ]
   },

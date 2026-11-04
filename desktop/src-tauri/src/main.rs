@@ -2,6 +2,9 @@
 // routines are doing and what of it needs the person, with a panel below it
 // and notifications. Everything is worked out here; the panel only draws.
 
+// a tray app: no console window beside it on Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod background;
 mod checks;
 mod codex;
@@ -28,6 +31,8 @@ mod unread;
 mod util;
 mod watch;
 
+use std::collections::HashMap;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{LazyLock, Mutex};
@@ -129,6 +134,11 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
     }
     {
         let last = LAST.lock().expect("last").clone();
+        // what park needs of a session the panel does not show is read before
+        // the store is taken: that reads all the inputs, the processes too, and
+        // the panel's moves and its closing wait for the store
+        let lookups = park_lookups(&kind, &ids, |id| last.as_ref().is_some_and(|s| s.items.iter().any(|i| i.id == id)));
+        let entries = if lookups.is_empty() { HashMap::new() } else { history_entries(&lookups) };
         let mut store = STORE.lock().expect("store");
         for id in ids {
             match kind.as_str() {
@@ -143,10 +153,9 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
                 }
                 "park" => {
                     let item = last.as_ref().and_then(|s| s.items.iter().find(|i| i.id == id));
-                    let entry = if item.is_none() { history_entry(&id) } else { None };
-                    let (title, project, said) = match (item, entry) {
+                    let (title, project, said) = match (item, entries.get(&id)) {
                         (Some(i), _) => (i.title.clone(), i.project.clone(), i.reason.clone()),
-                        (None, Some(e)) => (e.title, e.project, e.said),
+                        (None, Some(e)) => (e.title.clone(), e.project.clone(), e.said.clone()),
                         (None, None) => return Err("unknown session".into()),
                     };
                     store.resumed.remove(&id);
@@ -177,16 +186,67 @@ fn open(args: &[&str]) -> Result<(), String> {
     }
 }
 
-// a link through the shell's handler for its scheme, without a console window
+#[cfg(windows)]
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain([0]).collect()
+}
+
+// the scheme of a link, "claude" of "claude://…"; a path has none, nor is a
+// drive letter one ("C:\…")
+#[cfg(windows)]
+fn scheme(target: &str) -> Option<&str> {
+    let (scheme, _) = target.split_once(':')?;
+    let is_scheme = scheme.len() > 1 && scheme.starts_with(|c: char| c.is_ascii_alphabetic()) && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    is_scheme.then_some(scheme)
+}
+
+// what is said when no app on this PC takes a scheme's links
+#[cfg(windows)]
+fn no_app(scheme: &str) -> String {
+    match scheme.to_ascii_lowercase().as_str() {
+        "codex" => "Codex is not installed.".into(),
+        "claude" => "Claude is not installed.".into(),
+        other => format!("Nothing on this PC opens {other}: links."),
+    }
+}
+
+// whether an app takes links of the target's scheme, asked of the
+// associations. By its friendly name: the Store's Claude and Codex have no
+// command or executable to give. Only "no association" counts as none,
+// anything else is left to the shell
+#[cfg(windows)]
+fn handler(target: &str) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::ERROR_NO_ASSOCIATION;
+    use windows_sys::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_IS_PROTOCOL, ASSOCSTR_FRIENDLYAPPNAME};
+    let Some(scheme) = scheme(target) else { return Ok(()) };
+    let (name, verb) = (wide(scheme), wide("open"));
+    // no buffer: only whether there is a name, and its size
+    let mut size = 0;
+    let result = unsafe { AssocQueryStringW(ASSOCF_IS_PROTOCOL, ASSOCSTR_FRIENDLYAPPNAME, name.as_ptr(), verb.as_ptr(), std::ptr::null_mut(), &mut size) };
+    if result == (0x8007_0000 | ERROR_NO_ASSOCIATION) as i32 {
+        Err(no_app(scheme))
+    } else {
+        Ok(())
+    }
+}
+
+// a link through the shell's handler for its scheme, with no console window.
+// ShellExecute succeeds also for a scheme no app takes (Windows then shows its
+// own "Get an app" prompt), so that is asked first; its error covers only
+// other failures of the shell
 #[cfg(windows)]
 fn open(args: &[&str]) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let status = Command::new("rundll32.exe").arg("url.dll,FileProtocolHandler").args(args).creation_flags(CREATE_NO_WINDOW).status().map_err(|e| e.to_string())?;
-    if status.success() {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let Some((file, params)) = args.split_first() else { return Err("open: nothing".into()) };
+    handler(file)?;
+    let (verb, file, params) = (wide("open"), wide(file), wide(&params.join(" ")));
+    // above 32 is success, at or below it an error code
+    let result = unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), params.as_ptr(), std::ptr::null(), SW_SHOWNORMAL) } as isize;
+    if result > 32 {
         Ok(())
     } else {
-        Err(format!("open: {status}"))
+        Err(format!("open: ShellExecute error {result}"))
     }
 }
 
@@ -195,19 +255,32 @@ fn open_chat(app: AppHandle, id: String) -> Result<(), String> {
     if !is_app_id(&id) {
         return Err("id".into());
     }
-    if !panel::PINNED.load(Ordering::SeqCst) {
+    let link = match id.strip_prefix(codex::PREFIX) {
+        Some(thread) => format!("codex://threads/{thread}"),
+        None => format!("claude://claude.ai/epitaxy/{id}"),
+    };
+    // asked while the panel is still there, to tell why nothing opens
+    #[cfg(windows)]
+    handler(&link)?;
+    // a pinned panel stays, as does the small one
+    if !panel::PINNED.load(Ordering::SeqCst) && !panel::COMPACT.load(Ordering::SeqCst) {
         panel::hide(&app);
     }
-    match id.strip_prefix(codex::PREFIX) {
-        Some(thread) => open(&[&format!("codex://threads/{thread}")]),
-        None => open(&[&format!("claude://claude.ai/epitaxy/{id}")]),
-    }
+    open(&[&link])
 }
 
-// a session the panel does not show now (archived, long quiet), as the Verlauf has it
-fn history_entry(id: &str) -> Option<history::Entry> {
-    let inputs = inputs::load_inputs().ok()?;
-    history::history(&inputs, &[]).into_iter().find(|e| e.id == id)
+// the sessions to park that the panel does not show now (archived, long quiet)
+fn park_lookups<'a>(kind: &str, ids: &'a [String], is_shown: impl Fn(&str) -> bool) -> Vec<&'a str> {
+    if kind != "park" {
+        return Vec::new();
+    }
+    ids.iter().map(String::as_str).filter(|id| !is_shown(id)).collect()
+}
+
+// those sessions as the Verlauf has them, from one read of the inputs
+fn history_entries(ids: &[&str]) -> HashMap<String, history::Entry> {
+    let Ok(inputs) = inputs::load_inputs() else { return HashMap::new() };
+    history::history(&inputs, &[]).into_iter().filter(|e| ids.contains(&e.id.as_str())).map(|e| (e.id.clone(), e)).collect()
 }
 
 // Verlauf: every session the app keeps, newest first, as the panel shows them now
@@ -295,7 +368,7 @@ fn set_compact(compact: bool) {
     panel::COMPACT.store(compact, Ordering::SeqCst);
 }
 
-// whether the panel was moved to a place of its own, and back below the item
+// whether the panel stands at a place of its own ('Back' shows), and back below the item
 #[tauri::command]
 fn is_placed() -> bool {
     panel::is_placed()
@@ -307,7 +380,13 @@ fn reset_place(app: AppHandle) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // a second start shows the panel of the first instead of a second item in
+    // the tray; a debug build (npm run dev) runs beside the installed Pulse
+    // instead of handing itself over to it and ending at once
+    #[cfg(all(windows, not(debug_assertions)))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| panel::open_big(app)));
+    builder
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, set_pinned, set_compact, close_panel, panel_size, get_settings, set_settings, mark_command, history, is_placed, reset_place])
@@ -320,7 +399,10 @@ fn main() {
                 eprintln!("notify: {error}");
             }
             // a click on a notification about one session opens its chat in
-            // Claude, on any other the panel, big
+            // Claude, on any other the panel, big. On Windows a chat that
+            // does not open is told in a notification of its own, about no
+            // session: no panel is open to tell it, and a release build has
+            // no console
             let clicked = handle.clone();
             handle.notification().on_action(move |action| {
                 if action.action_id() != "tap" {
@@ -329,10 +411,19 @@ fn main() {
                 match action.notification().and_then(|n| n.extra().get(notify::SESSION)).and_then(|v| v.as_str()) {
                     Some(id) => {
                         if let Err(error) = open_chat(clicked.clone(), id.to_string()) {
+                            #[cfg(windows)]
+                            notify::send(&clicked, "The chat did not open", &error, None);
+                            #[cfg(not(windows))]
                             eprintln!("notify: {error}");
                         }
                     }
-                    None => panel::open_big(&clicked),
+                    // on the main thread, as a click on the item: the plugin
+                    // calls this on a thread of the notification's own, and
+                    // the panel asks the main thread for the screens
+                    None => {
+                        let app = clicked.clone();
+                        let _ = clicked.run_on_main_thread(move || panel::open_big(&app));
+                    }
                 }
             })?;
             panel::set_appearance(&handle, SETTINGS.lock().expect("settings").0.appearance);
@@ -346,10 +437,68 @@ fn main() {
             WindowEvent::Moved(at) if window.label() == panel::LABEL => panel::on_moved(window.app_handle(), *at),
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                let _ = window.hide();
+                // the panel closed (Alt+F4) keeps the place it was moved to
+                if window.label() == panel::LABEL {
+                    panel::hide(window.app_handle());
+                } else {
+                    let _ = window.hide();
+                }
             }
             _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("Pulse could not start");
+        .build(tauri::generate_context!())
+        .expect("Pulse could not start")
+        // the store is written on the way out (Quit, the installer, the end of
+        // the session): a pinned or small panel does not close, so the place
+        // it was moved to is in memory only
+        .run(|_, event| {
+            if let tauri::RunEvent::Exit = event {
+                let Ok(store) = STORE.lock() else { return };
+                if let Err(error) = save(&store) {
+                    eprintln!("store: {error}");
+                }
+            }
+        });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn park_looks_up_only_the_sessions_the_panel_does_not_show() {
+        let ids: Vec<String> = ["local_a", "local_b", "codex_c"].map(String::from).to_vec();
+        assert_eq!(park_lookups("park", &ids, |id| id == "local_a"), ["local_b", "codex_c"]);
+        // no snapshot yet: each is looked up
+        assert_eq!(park_lookups("park", &ids, |_| false), ["local_a", "local_b", "codex_c"]);
+        assert!(park_lookups("park", &ids, |_| true).is_empty());
+        // the other marks need none
+        for kind in ["seen", "done", "open", "resume", "forget"] {
+            assert!(park_lookups(kind, &ids, |_| false).is_empty());
+        }
+    }
+
+    // these ask the registry only; nothing is opened
+    #[cfg(windows)]
+    #[test]
+    fn a_link_has_a_scheme_a_path_none() {
+        assert_eq!(scheme("claude://claude.ai/epitaxy/local_x"), Some("claude"));
+        assert_eq!(scheme("codex://threads/x"), Some("codex"));
+        assert_eq!(scheme("ms-settings:display"), Some("ms-settings"));
+        // a drive letter is no scheme
+        assert_eq!(scheme(r"C:\Users\x\notes.txt"), None);
+        assert_eq!(scheme("c:/x"), None);
+        assert_eq!(scheme("notes.txt"), None);
+        assert_eq!(scheme("1x://y"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_scheme_no_app_takes_is_told() {
+        assert_eq!(no_app("codex"), "Codex is not installed.");
+        assert_eq!(no_app("Claude"), "Claude is not installed.");
+        assert_eq!(handler("pulse-no-such-scheme-x://y"), Err("Nothing on this PC opens pulse-no-such-scheme-x: links.".to_string()));
+        // a path is left to the shell
+        assert_eq!(handler(r"C:\Windows\notepad.exe"), Ok(()));
+    }
 }
