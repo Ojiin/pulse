@@ -404,6 +404,7 @@ mod tests {
         Session {
             id: id.into(),
             cli_id: Some(format!("cli-{id}")),
+            rollout: None,
             title: Some(format!("Chat {id}")),
             cwd: Some("/Users/x/Work/shop-api/.claude/worktrees/bold-x".into()),
             origin_cwd: None,

@@ -34,7 +34,9 @@ the notification area (the tray), and the panel opens by the taskbar; see
   today, now, what comes and what was missed, *History* every session the app
   keeps, archived ones too, by its last activity and grouped by day, with
   what it said last (a search through title, folder and that sentence;
-  sessions by default, routines on request; loaded when the tab opens). What
+  sessions by default, routines on request; loaded when the tab opens). Old and
+  archived Codex answers are read on demand, including compressed rollouts, and
+  the same sentence is kept when parking a session from History. What
   a session says itself (its STATUS sentence, the app's summary) stays in the
   language it was said in.
 - **An item** reads in three lines: its title, its folder, what Claude (or

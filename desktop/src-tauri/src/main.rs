@@ -138,7 +138,17 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
         // the store is taken: that reads all the inputs, the processes too, and
         // the panel's moves and its closing wait for the store
         let lookups = park_lookups(&kind, &ids, |id| last.as_ref().is_some_and(|s| s.items.iter().any(|i| i.id == id)));
-        let entries = if lookups.is_empty() { HashMap::new() } else { history_entries(&lookups) };
+        let entries = if lookups.is_empty() {
+            HashMap::new()
+        } else {
+            let lookups: Vec<String> = lookups.into_iter().map(str::to_owned).collect();
+            tauri::async_runtime::spawn_blocking(move || {
+                let ids: Vec<&str> = lookups.iter().map(String::as_str).collect();
+                history_entries(&ids)
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        };
         let mut store = STORE.lock().expect("store");
         for id in ids {
             match kind.as_str() {
@@ -280,7 +290,7 @@ fn park_lookups<'a>(kind: &str, ids: &'a [String], is_shown: impl Fn(&str) -> bo
 // those sessions as the Verlauf has them, from one read of the inputs
 fn history_entries(ids: &[&str]) -> HashMap<String, history::Entry> {
     let Ok(inputs) = inputs::load_inputs() else { return HashMap::new() };
-    history::history(&inputs, &[]).into_iter().filter(|e| ids.contains(&e.id.as_str())).map(|e| (e.id.clone(), e)).collect()
+    history::selected(&inputs, &[], ids).into_iter().map(|e| (e.id.clone(), e)).collect()
 }
 
 // Verlauf: every session the app keeps, newest first, as the panel shows them now

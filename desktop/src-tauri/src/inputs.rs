@@ -26,6 +26,8 @@ pub const WINDOW_MS: f64 = 14.0 * DAY_MS;
 pub struct Session {
     pub id: String,
     pub cli_id: Option<String>,
+    // A Codex rollout omitted from the live refresh, read lazily for History.
+    pub rollout: Option<PathBuf>,
     pub title: Option<String>,
     pub cwd: Option<String>,
     // the folder the session was started in; a worktree's session names its repository here
@@ -173,6 +175,7 @@ fn pick(raw: &Value) -> Option<Session> {
     Some(Session {
         id: string(m, "sessionId")?,
         cli_id: string(m, "cliSessionId"),
+        rollout: None,
         title: string(m, "title"),
         cwd: string(m, "cwd"),
         origin_cwd: string(m, "originCwd"),
