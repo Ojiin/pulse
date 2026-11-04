@@ -104,8 +104,9 @@ use *Park* on its line in the panel (in *Open* or *History*).
 Parked topics sit folded at the bottom of *Open* with where they stand; they
 count nowhere and send no notification, only on Mondays the morning summary
 names them. Pulse keeps its own note of each, so it stays however old, also
-archived, and as a note when the app no longer keeps the session. Writing in
-the session again takes it up again, as does *Resume*.
+archived, and as a note when the app no longer keeps the session. A click
+opens the session to look at it and it stays parked; it ends when the session
+goes on or with *Unpark*, which puts it back in *Open*.
 
 ## What it reads and writes
 

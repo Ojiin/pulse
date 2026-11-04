@@ -228,7 +228,8 @@ fn item_of(s: &Session, input: &Inputs, records: &HashMap<&str, &RunRecord>, tas
         (State::Quiet, _) | (_, Some(MarkKind::Done)) => Stage::Done,
         // a result is only to be read: once opened in Claude it is done
         (State::Review, Some(MarkKind::Seen)) => Stage::Done,
-        (State::Review, None) if !input.unread.contains(&s.id) => Stage::Done,
+        // (unparked it is back on the table, read long ago or not)
+        (State::Review, None) if !input.unread.contains(&s.id) && !resumed => Stage::Done,
         // a question, open points or a block stay open, read or not, until
         // they are marked done or the session goes on; "later" sets them aside
         (_, Some(MarkKind::Seen)) => Stage::Follow,
@@ -498,7 +499,7 @@ mod tests {
         store.parked.remove("a");
         store.resumed.insert("a".into(), NOW);
         let snap = build(&input, &store, 60);
-        assert_ne!(snap.items[0].stage, Stage::Parked);
+        assert_eq!(snap.items[0].stage, Stage::Open);
         sync_parked(&snap, &mut store);
         assert!(store.parked.is_empty());
 
@@ -508,6 +509,10 @@ mod tests {
         let mut input = inputs(vec![old.clone()], vec![], vec![]);
         let mut store = Store::default();
         store.parked.insert("b".into(), note(NOW - H));
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Parked);
+        // looked at in Claude: the time it was opened changes nothing
+        old.last_focused = Some(NOW);
+        input.sessions = vec![old.clone()];
         assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Parked);
         old.last_activity = Some(NOW);
         input.sessions = vec![old];

@@ -115,7 +115,7 @@ export function Row({ item, now, from }: { item: Item; now: number; from?: strin
           {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen')} />}
           {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done')} />}
           {item.stage === 'parked' ? (
-            <Action glyph="external" label="Resume: open in Claude" onClick={() => void mark([item.id], 'resume').then(() => openChat(item.id))} />
+            <Action glyph="unpark" label="Unpark" onClick={() => void mark([item.id], 'resume')} />
           ) : (
             item.stage !== 'running' && <Action glyph="parked" label="Park: keep it in mind" onClick={() => void mark([item.id], 'park')} />
           )}
@@ -226,12 +226,12 @@ export function CheckRow({ check, now }: { check: Check; now: number }) {
   )
 }
 
-// a topic set aside: what it is, where it stands, since when; a click takes it
-// up again in Claude; a note whose session is gone can only be dropped
+// a topic set aside: what it is, where it stands, since when; a click opens it
+// in Claude to look, and it stays parked until it is unparked or goes on; a
+// note whose session is gone can only be dropped
 export function ParkedRow({ parked: p, now, type }: { parked: ParkedView; now: number; type?: Type }) {
-  const resume = () => void mark([p.id], 'resume').then(() => openChat(p.id))
   return (
-    <div className={`row ${p.gone ? 'dim' : ''}`} title={p.gone ? 'The app no longer has this session' : 'Resume: open in Claude'} onClick={() => !p.gone && resume()}>
+    <div className={`row ${p.gone ? 'dim' : ''}`} title={p.gone ? 'The app no longer has this session' : 'Open in Claude'} onClick={() => !p.gone && void openChat(p.id)}>
       <Disc mark="parked" type={type} />
       <b className="title" title={p.title}>
         {p.title}
@@ -244,7 +244,7 @@ export function ParkedRow({ parked: p, now, type }: { parked: ParkedView; now: n
           {p.gone ? (
             <Action glyph="close" label="Remove note" onClick={() => void mark([p.id], 'forget')} />
           ) : (
-            <Action glyph="external" label="Resume: open in Claude" onClick={resume} />
+            <Action glyph="unpark" label="Unpark" onClick={() => void mark([p.id], 'resume')} />
           )}
         </span>
       </span>
