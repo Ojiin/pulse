@@ -19,7 +19,7 @@ use crate::items::Counts;
 use crate::panel;
 
 const ID: &str = "main";
-const HEIGHT: usize = 36;
+pub const HEIGHT: usize = 36;
 
 struct Mask {
     w: usize,
@@ -102,13 +102,13 @@ impl Canvas {
 }
 
 // a symbol and its count side by side
-struct Chip {
+pub struct Chip {
     mask: &'static Mask,
     color: [u8; 3],
     count: Option<usize>,
 }
 
-fn chips(counts: &Counts) -> Vec<Chip> {
+pub fn chips(counts: &Counts) -> Vec<Chip> {
     let m = &*MASKS;
     let mut list = Vec::new();
     for (n, mask, color) in [(counts.blocked, &m.blocked, RED), (counts.waiting, &m.waiting, AMBER), (counts.review, &m.review, VIOLET), (counts.commands, &m.commands, TEAL)] {
@@ -119,13 +119,13 @@ fn chips(counts: &Counts) -> Vec<Chip> {
     list
 }
 
-#[cfg(not(windows))]
 const GAP_DIGIT: usize = 3;
-#[cfg(not(windows))]
 const GAP_CHIP: usize = 14;
 
-#[cfg(not(windows))]
-fn render(chips: &[Chip]) -> Image<'static> {
+// the chips side by side, HEIGHT high, as straight RGBA and its width; the
+// digits in each chip's colour, or all in `ink` (the Windows taskbar's text
+// colour, taskbar.rs)
+pub fn strip(chips: &[Chip], ink: Option<[u8; 3]>) -> (Vec<u8>, usize) {
     let m = &*MASKS;
     let digits = |n: usize| n.to_string().bytes().map(|b| &m.digits[(b - b'0') as usize]).collect::<Vec<_>>();
     let width: usize = chips
@@ -141,13 +141,19 @@ fn render(chips: &[Chip]) -> Image<'static> {
         if let Some(n) = chip.count {
             x += GAP_DIGIT;
             for d in digits(n) {
-                canvas.draw(d, x, 0, chip.color);
+                canvas.draw(d, x, 0, ink.unwrap_or(chip.color));
                 x += d.w + 1;
             }
         }
         x += GAP_CHIP;
     }
-    Image::new_owned(canvas.rgba, width.max(1) as u32, HEIGHT as u32)
+    (canvas.rgba, width.max(1))
+}
+
+#[cfg(not(windows))]
+fn render(chips: &[Chip]) -> Image<'static> {
+    let (rgba, width) = strip(chips, None);
+    Image::new_owned(rgba, width as u32, HEIGHT as u32)
 }
 
 // all calm: a check in the menu bar's own colour (a template image); the
@@ -161,7 +167,8 @@ fn calm() -> Image<'static> {
 }
 
 // the Windows tray shows a square: the most urgent symbol, and on it a badge
-// with the count of everything open; the tooltip names each count (tooltip)
+// with the count of everything open; the tooltip names each count (tooltip),
+// and the strip itself sits on the taskbar (taskbar.rs)
 #[cfg(windows)]
 fn render_square(chips: &[Chip]) -> Image<'static> {
     let m = &*MASKS;
@@ -236,8 +243,11 @@ pub fn show(app: &AppHandle, counts: &Counts) {
     if SHOWN.lock().expect("tray shown").replace(shown) != Some(shown) {
         draw(app, counts);
     }
+    let tip = tooltip(counts);
+    #[cfg(windows)]
+    crate::taskbar::show(counts, &tip);
     if let Some(tray) = app.tray_by_id(ID) {
-        let _ = tray.set_tooltip(Some(tooltip(counts)));
+        let _ = tray.set_tooltip(Some(tip));
     }
 }
 

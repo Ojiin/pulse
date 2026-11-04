@@ -33,7 +33,13 @@ It has two parts:
 Pulse also runs on Windows 10/11, where it sits in the notification area (the
 tray) and its panel opens by the taskbar. The tray shows one square: the most
 urgent state's symbol with a badge of everything open; the tooltip names each
-count (for example "Pulse: 1 blocked, 2 questions").
+count (for example "Pulse: 1 blocked, 2 questions"). Beside the tray, the
+taskbar shows the menu bar's strip itself: each open state's symbol with its
+count, the digits in the taskbar's text colour; a click on it opens the panel.
+Windows 11 has no taskbar toolbars, so the strip is a small window of Pulse's
+above the taskbar. It keeps clear of the taskbar's buttons, and hides when there
+is no room, when a full-screen window is in front or when the taskbar slides
+away. *Settings → Taskbar* turns it off.
 On Windows Pulse reads:
 
 - the Claude app's sessions under `%LOCALAPPDATA%\Claude-Data\<package>` (the

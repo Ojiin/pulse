@@ -98,5 +98,6 @@ export type Settings = {
   summaryAt: number
   parkedWeekly: boolean
   appearance: Appearance
+  taskbar: boolean
 }
 export type Appearance = 'system' | 'light' | 'dark'

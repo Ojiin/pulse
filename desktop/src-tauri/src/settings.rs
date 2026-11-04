@@ -1,6 +1,7 @@
 // What the person chose for the notifications on the Mac: per open state
 // whether it is told at once and whether it is reminded of while it lies,
-// after how many hours, and the morning summary; and how the panel looks.
+// after how many hours, and the morning summary; how the panel looks, and
+// on Windows whether the counts show on the taskbar.
 // One JSON file beside the state; without one, Pulse tells as it always did.
 
 use std::path::{Path, PathBuf};
@@ -42,6 +43,10 @@ pub struct Settings {
     pub parked_weekly: bool,
     #[serde(default)]
     pub appearance: Appearance,
+    // on Windows the menu bar's strip of counts on the taskbar, by the tray
+    // (taskbar.rs)
+    #[serde(default = "yes")]
+    pub taskbar: bool,
 }
 
 // how the panel looks: as the system does, or always light or dark
@@ -96,6 +101,7 @@ impl Default for Settings {
             summary_at: 8 * 60,
             parked_weekly: true,
             appearance: Appearance::System,
+            taskbar: true,
         }
     }
 }
@@ -199,8 +205,9 @@ mod tests {
         map.remove("commands");
         map.remove("limits");
         map.remove("appearance");
+        map.remove("taskbar");
         let read: Settings = serde_json::from_value(old).expect("read");
-        assert_eq!((read.commands, read.limits, read.appearance), (commands_rule(), Limits::default(), Appearance::System));
+        assert_eq!((read.commands, read.limits, read.appearance, read.taskbar), (commands_rule(), Limits::default(), Appearance::System, true));
     }
 
     #[test]

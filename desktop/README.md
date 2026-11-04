@@ -90,6 +90,8 @@ the notification area (the tray), and the panel opens by the taskbar; see
   light tint from `tauri.windows.conf.json` beneath it. The app icon in the
   foot of the panel follows it too: `assets/app-icon.svg` dark,
   `assets/app-icon-light.svg` light.
+- **Taskbar** (Windows), also under the gear: the menu bar's strip of counts on
+  the taskbar beside the tray, on by default (`src-tauri/src/taskbar.rs`).
 - Right click on the item: start at login, quit.
 
 ## An item's life

@@ -27,6 +27,10 @@ const APPEARANCES: [Appearance, string][] = [
 
 const MAX_HOURS = 720
 
+// on Windows (main.tsx marks the page) the counts can sit on the taskbar, by
+// the tray (taskbar.rs)
+const onWindows = () => document.documentElement.classList.contains('win')
+
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 
 // The notifications on the Mac: per state at once and while it lies, the
@@ -95,6 +99,16 @@ export function SettingsView({ onDone }: { onDone: () => void }) {
           ))}
         </div>
       </div>
+
+      {onWindows() && (
+        <div className="st-row">
+          <span className="st-label">Taskbar</span>
+          <label className="st-check">
+            <input type="checkbox" checked={settings.taskbar} onChange={e => save({ ...settings, taskbar: e.target.checked })} />
+            Show the counts
+          </label>
+        </div>
+      )}
 
       <span className="st-label st-section">Notifications</span>
 

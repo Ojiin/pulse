@@ -26,6 +26,8 @@ mod said;
 mod settings;
 mod store;
 mod subagents;
+#[cfg(windows)]
+mod taskbar;
 mod tray;
 mod unread;
 mod util;
@@ -336,6 +338,8 @@ fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> 
     let settings = settings.checked()?;
     settings::save(&settings)?;
     panel::set_appearance(&app, settings.appearance);
+    #[cfg(windows)]
+    taskbar::set_on(settings.taskbar);
     {
         let mut store = STORE.lock().expect("store");
         notify::rebase(&mut store, &settings, now_ms());
@@ -428,6 +432,8 @@ fn main() {
             })?;
             panel::set_appearance(&handle, SETTINGS.lock().expect("settings").0.appearance);
             tray::build(&handle)?;
+            #[cfg(windows)]
+            taskbar::start(handle.clone(), SETTINGS.lock().expect("settings").0.taskbar);
             watch::start(handle.clone(), refresh)?;
             std::thread::spawn(move || refresh(&handle));
             Ok(())
