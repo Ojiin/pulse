@@ -25,7 +25,8 @@ the panel (`ui/`, React) only draws.
   kind, its task, how long; three shown, the rest behind "+n more"); then
   what needs you, a card per state (in each what lies longer than 24 h on
   top, its age on red; below a rule, *Set aside*: *Later*, *Parked* and *Known*, each on a quieter card that its head folds). *Timeline* shows
-  today, now, what comes and what was missed, *History* every session the app
+  today, now, what comes and what was missed (recurring plans are grouped by
+  local day, through the end of tomorrow), *History* every session the app
   keeps, archived ones too, by its last activity and grouped by day, with
   what it said last (a search through title, folder and that sentence;
   sessions by default, routines on request; loaded when the tab opens). What
