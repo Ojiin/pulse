@@ -89,6 +89,12 @@ blocked, not running:
 a shell command open for 30 s without its process, or an edit open as long
 (in auto mode a classifier looks at a command for 10 to 15 s before it runs,
 and the session goes on by itself whether it allows it or not).
+Unanswered approvals, questions and plans remain open for up to seven
+days, including across Pulse restarts, until answered or the turn ends.
+This allows the hourly and daily reminders to fire. A crashed session can also
+appear to wait until that limit; **Done** dismisses it. A foreground command
+keeps an open turn running even when its transcript has been quiet for more
+than 30 minutes.
 A session whose turn ended but that still
 has a command, workflow or monitor running in the background (or a background
 subagent) is running: it waits for that work and goes on when it is done;

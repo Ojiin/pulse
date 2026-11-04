@@ -288,7 +288,13 @@ pub fn build(input: &Inputs, store: &Store, tz: i64) -> Snapshot {
         .sessions
         .iter()
         // a parked topic stays, however old, archived or not
-        .filter(|s| input.running.contains(&s.id) || store.parked.contains_key(&s.id) || (!s.archived && s.last_activity.unwrap_or(0.0) > now - WINDOW_MS))
+        .filter(|s| {
+            input.running.contains(&s.id)
+                || input.awaiting.contains_key(&s.id)
+                || input.asking.contains_key(&s.id)
+                || store.parked.contains_key(&s.id)
+                || (!s.archived && s.last_activity.unwrap_or(0.0) > now - WINDOW_MS)
+        })
         .map(|s| item_of(s, input, &records, &tasks, store))
         .collect();
     items.sort_by(|a, b| b.since.total_cmp(&a.since));
