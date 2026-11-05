@@ -71,7 +71,9 @@ the panel (`ui/`, React) only draws.
 running → open → done. Open is one of two kinds:
 
 - a **result** (the work is finished, there is only something to read): once
-  you opened it in Claude it is done, or you close it with *Done*;
+  you opened it in Claude it is done, or you close it with *Done*. The app's
+  unread dot says what was read, but it gives none to the session it has on
+  show, so an answer that ends with Claude not in front counts as unread too;
 - something that **needs you** (a question, a decision, points still open, or
   a block): reading it settles nothing. It stays open until you close it with
   *Done* or the session goes on and says something new; *Later* sets it

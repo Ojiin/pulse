@@ -5,6 +5,7 @@
 mod background;
 mod checks;
 mod cron;
+mod front;
 mod history;
 mod inputs;
 mod items;
@@ -47,8 +48,15 @@ fn tz_offset_min() -> i64 {
 
 fn compute() -> Result<Snapshot, String> {
     let inputs = inputs::load_inputs()?;
-    let store = STORE.lock().expect("store");
+    let mut store = STORE.lock().expect("store");
     let mut snap = items::build(&inputs, &store, tz_offset_min());
+    let before = LAST.lock().expect("last").as_ref().map(|s| s.items.clone()).unwrap_or_default();
+    if items::sync_unseen(&snap.items, &before, &mut store, front::claude_in_front()) {
+        snap = items::build(&inputs, &store, tz_offset_min());
+        if let Err(error) = save(&store) {
+            eprintln!("store: {error}");
+        }
+    }
     let (settings, problem) = SETTINGS.lock().expect("settings").clone();
     if let Some(problem) = problem {
         snap.problems.push(format!("Settings unreadable, the defaults apply: {problem}"));
@@ -116,7 +124,7 @@ async fn snapshot() -> Result<Snapshot, String> {
 // park sets a topic aside with a copy of what it is, resume takes it up again,
 // forget drops the note of one whose session is gone
 #[tauri::command]
-async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), String> {
+async fn mark(app: AppHandle, ids: Vec<String>, kind: String, shown: Option<f64>) -> Result<(), String> {
     if ids.len() > 500 || ids.iter().any(|id| !is_app_id(id)) {
         return Err("ids".into());
     }
@@ -126,10 +134,10 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
         for id in ids {
             match kind.as_str() {
                 "seen" => {
-                    store.marks.insert(id, Mark { kind: MarkKind::Seen, at: now_ms() });
+                    store.marks.insert(id, Mark { kind: MarkKind::Seen, at: now_ms(), shown });
                 }
                 "done" => {
-                    store.marks.insert(id, Mark { kind: MarkKind::Done, at: now_ms() });
+                    store.marks.insert(id, Mark { kind: MarkKind::Done, at: now_ms(), shown });
                 }
                 "open" => {
                     store.marks.remove(&id);
@@ -177,6 +185,7 @@ fn open_chat(app: AppHandle, id: String) -> Result<(), String> {
     if !panel::PINNED.load(Ordering::SeqCst) {
         panel::hide(&app);
     }
+    STORE.lock().expect("store").unseen.remove(&id);
     open(&[&format!("claude://claude.ai/epitaxy/{id}")])
 }
 

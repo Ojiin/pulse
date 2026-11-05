@@ -19,6 +19,8 @@ rusty-leveldb = "3"
 png = "0.17"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 libc = "0.2"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
 
 [profile.release]
 lto = true

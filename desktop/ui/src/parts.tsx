@@ -112,8 +112,8 @@ export function Row({ item, now, from }: { item: Item; now: number; from?: strin
       <span className="right">
         {item.stage === 'running' ? <span className="age run">running</span> : isDone ? <span className="age">{clock(item.since)}</span> : <Age t={item.since} now={now} />}
         <span className="acts">
-          {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen')} />}
-          {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done')} />}
+          {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen', item.since)} />}
+          {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done', item.since)} />}
           {item.stage === 'parked' ? (
             <Action glyph="unpark" label="Unpark" onClick={() => void mark([item.id], 'resume')} />
           ) : (
