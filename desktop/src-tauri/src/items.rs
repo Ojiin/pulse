@@ -61,6 +61,9 @@ pub struct Item {
     pub parent_id: Option<String>,
     pub live: Option<Live>,
     pub subagents: Vec<SubagentView>,
+    // when the app last brought it on show
+    #[serde(skip)]
+    pub focused: f64,
 }
 
 #[derive(Serialize, Clone)]
@@ -126,6 +129,8 @@ pub struct ParkedView {
 
 // activity this soon after parking still belongs to it (the app writes a title, a summary)
 const PARK_GRACE_MS: f64 = 60_000.0;
+// activity this soon after what was on screen when it was marked still belongs to it
+const MARK_GRACE_MS: f64 = 15_000.0;
 
 // the project a folder belongs to: a worktree counts to its repository
 pub fn project_of(path: &str) -> String {
@@ -228,14 +233,16 @@ fn item_of(s: &Session, input: &Inputs, records: &HashMap<&str, &RunRecord>, tas
     let is_parked = state != State::Running
         && ((said_parked && !resumed) || store.parked.get(&s.id).is_some_and(|p| since <= p.at + PARK_GRACE_MS));
 
-    let mark = store.marks.get(&s.id).filter(|m| m.at >= since);
+    let mark = store.marks.get(&s.id).filter(|m| m.at >= since && m.shown.is_none_or(|shown| since <= shown + MARK_GRACE_MS));
     let stage = match (state, mark.map(|m| m.kind)) {
         _ if is_parked => Stage::Parked,
         (State::Running, _) => Stage::Running,
         (State::Quiet, _) | (_, Some(MarkKind::Done)) => Stage::Done,
         // a result is only to be read: once opened in Claude it is done
         (State::Review, Some(MarkKind::Seen)) => Stage::Done,
-        (State::Review, None) if !input.unread.contains(&s.id) => Stage::Done,
+        // (unparked it is back on the table, read long ago or not, and an
+        // answer nobody was there for has no reader yet: sync_unseen)
+        (State::Review, None) if !input.unread.contains(&s.id) && !resumed && !store.unseen.contains_key(&s.id) => Stage::Done,
         // a question, open points or a block stay open, read or not, until
         // they are marked done or the session goes on; "later" sets them aside
         (_, Some(MarkKind::Seen)) => Stage::Follow,
@@ -261,6 +268,7 @@ fn item_of(s: &Session, input: &Inputs, records: &HashMap<&str, &RunRecord>, tas
         parent_id: s.parent_id.clone(),
         live: input.live.get(&s.id).cloned(),
         subagents: input.subagents.get(&s.id).cloned().unwrap_or_default(),
+        focused: s.last_focused.unwrap_or(0.0),
     }
 }
 
@@ -384,6 +392,25 @@ pub fn sync_parked(snap: &Snapshot, store: &mut Store) -> bool {
     changed || before != (store.parked.len(), store.resumed.len())
 }
 
+// the app gives no unread dot to an answer in the session it has on show,
+// even with the person gone: a result that ends with Claude not in front
+// counts as unread until the session is opened or goes on (a Codex thread has
+// read receipts of its own); returns whether the store changed
+pub fn sync_unseen(items: &[Item], before: &[Item], store: &mut Store, in_front: bool) -> bool {
+    let count = store.unseen.len();
+    store.unseen.retain(|id, at| items.iter().any(|i| &i.id == id && i.stage != Stage::Running && i.focused < *at));
+    let mut changed = count != store.unseen.len();
+    if !in_front {
+        let ended = |i: &Item| before.iter().any(|b| b.id == i.id && b.stage == Stage::Running);
+        let claude = |i: &Item| !i.id.starts_with(crate::codex::PREFIX);
+        for item in items.iter().filter(|i| claude(i) && i.state == State::Review && i.focused < i.since && ended(i)) {
+            store.unseen.insert(item.id.clone(), item.since);
+            changed = true;
+        }
+    }
+    changed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,6 +431,7 @@ mod tests {
         Session {
             id: id.into(),
             cli_id: Some(format!("cli-{id}")),
+            rollout: None,
             title: Some(format!("Chat {id}")),
             cwd: Some("/Users/x/Work/shop-api/.claude/worktrees/bold-x".into()),
             origin_cwd: None,
@@ -482,9 +510,9 @@ mod tests {
         assert_eq!(open.items[0].project, "shop-api");
 
         let mut store = Store::default();
-        store.marks.insert("q".into(), Mark { kind: MarkKind::Seen, at: NOW });
+        store.marks.insert("q".into(), Mark { kind: MarkKind::Seen, at: NOW, shown: None });
         assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Follow);
-        store.marks.insert("q".into(), Mark { kind: MarkKind::Done, at: NOW });
+        store.marks.insert("q".into(), Mark { kind: MarkKind::Done, at: NOW, shown: None });
         assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Done);
 
         // it answered again after the mark: open again
@@ -520,7 +548,7 @@ mod tests {
         store.parked.remove("a");
         store.resumed.insert("a".into(), NOW);
         let snap = build(&input, &store, 60);
-        assert_ne!(snap.items[0].stage, Stage::Parked);
+        assert_eq!(snap.items[0].stage, Stage::Open);
         sync_parked(&snap, &mut store);
         assert!(store.parked.is_empty());
 
@@ -530,6 +558,10 @@ mod tests {
         let mut input = inputs(vec![old.clone()], vec![], vec![]);
         let mut store = Store::default();
         store.parked.insert("b".into(), note(NOW - H));
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Parked);
+        // looked at in Claude: the time it was opened changes nothing
+        old.last_focused = Some(NOW);
+        input.sessions = vec![old.clone()];
         assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Parked);
         old.last_activity = Some(NOW);
         input.sessions = vec![old];
@@ -546,6 +578,65 @@ mod tests {
         assert_eq!((snap.parked.len(), snap.parked[0].gone), (1, true));
         assert!(!sync_parked(&snap, &mut store));
         assert_eq!(store.parked.len(), 1);
+    }
+
+    #[test]
+    fn a_mark_covers_what_was_on_screen() {
+        let mut input = inputs(vec![session("a", NOW - 1000.0)], vec![], vec![]);
+        input.said.insert("a".into(), Said { state: "worked".into(), text: "Fertig".into() });
+        input.unread.insert("a".into());
+        let mut store = Store::default();
+        // clicked on the question while the next answer came in
+        store.marks.insert("a".into(), Mark { kind: MarkKind::Done, at: NOW, shown: Some(NOW - 100_000.0) });
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Open);
+        // clicked on that answer
+        store.marks.insert("a".into(), Mark { kind: MarkKind::Done, at: NOW, shown: Some(NOW - 1000.0) });
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Done);
+    }
+
+    #[test]
+    fn an_answer_with_nobody_at_the_app_is_unread_without_a_dot() {
+        let mut quiet = session("a", NOW - 1000.0);
+        quiet.last_focused = Some(NOW - 20_000.0);
+        let mut input = inputs(vec![quiet.clone()], vec![], vec![]);
+        input.said.insert("a".into(), Said { state: "worked".into(), text: "Fertig".into() });
+        let mut store = Store::default();
+        let mut running = build(&input, &store, 60).items;
+        assert_eq!(running[0].stage, Stage::Done);
+        running[0].stage = Stage::Running;
+        let items = build(&input, &store, 60).items;
+
+        // Claude in front: read as it came
+        assert!(!sync_unseen(&items, &running, &mut store, true));
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Done);
+
+        // not in front: open, also on the next look
+        assert!(sync_unseen(&items, &running, &mut store, false));
+        let items = build(&input, &store, 60).items;
+        assert_eq!(items[0].stage, Stage::Open);
+        assert!(!sync_unseen(&items, &items, &mut store, false));
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Open);
+
+        // the session is brought on show: read
+        quiet.last_focused = Some(NOW);
+        input.sessions = vec![quiet];
+        let items = build(&input, &store, 60).items;
+        assert!(sync_unseen(&items, &items, &mut store, false));
+        assert!(store.unseen.is_empty());
+        assert_eq!(build(&input, &store, 60).items[0].stage, Stage::Done);
+    }
+
+    #[test]
+    fn a_codex_answer_keeps_to_its_own_read_receipts() {
+        let id = format!("{}t1", crate::codex::PREFIX);
+        let mut input = inputs(vec![session(&id, NOW - 1000.0)], vec![], vec![]);
+        input.said.insert(id.clone(), Said { state: "worked".into(), text: "Done".into() });
+        let mut store = Store::default();
+        let mut running = build(&input, &store, 60).items;
+        running[0].stage = Stage::Running;
+        let items = build(&input, &store, 60).items;
+        assert!(!sync_unseen(&items, &running, &mut store, false));
+        assert!(store.unseen.is_empty());
     }
 
     #[test]
@@ -589,8 +680,8 @@ mod tests {
         input.unread = HashSet::from(["r".to_string()]);
         let mut store = Store::default();
         assert_eq!(build(&input, &store, 60).items.iter().find(|i| i.id == "r").map(|i| i.stage), Some(Stage::Open));
-        store.marks.insert("w".into(), Mark { kind: MarkKind::Seen, at: NOW });
-        store.marks.insert("r".into(), Mark { kind: MarkKind::Seen, at: NOW });
+        store.marks.insert("w".into(), Mark { kind: MarkKind::Seen, at: NOW, shown: None });
+        store.marks.insert("r".into(), Mark { kind: MarkKind::Seen, at: NOW, shown: None });
         let later = build(&input, &store, 60);
         let stage = |id: &str| later.items.iter().find(|i| i.id == id).map(|i| i.stage);
         assert_eq!((stage("w"), stage("r")), (Some(Stage::Follow), Some(Stage::Done)));

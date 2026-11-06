@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::inputs::{transcript_of, Inputs};
+use crate::inputs::{transcript_of, Inputs, Session};
 use crate::items::{clean_name, kind_of, project_of, Item, Kind, Stage, State};
 use crate::said::said_of;
 use crate::util::paths;
@@ -31,12 +31,23 @@ pub struct Entry {
 }
 
 pub fn history(input: &Inputs, items: &[Item]) -> Vec<Entry> {
+    entries(input, items, |_| true)
+}
+
+// Park needs only the requested sessions. Filter before reading any old rollout:
+// one parked thread must not decompress the rest of the history.
+pub fn selected(input: &Inputs, items: &[Item], ids: &[&str]) -> Vec<Entry> {
+    entries(input, items, |s| ids.contains(&s.id.as_str()))
+}
+
+fn entries(input: &Inputs, items: &[Item], include: impl Fn(&Session) -> bool) -> Vec<Entry> {
     let projects = paths().map(|p| p.projects).ok();
     let tasks: HashMap<&str, _> = input.tasks.iter().map(|t| (t.id.as_str(), t)).collect();
     let records: HashMap<&str, _> = input.records.iter().map(|r| (r.session_id.as_str(), r)).collect();
     let mut list: Vec<Entry> = input
         .sessions
         .iter()
+        .filter(|s| include(s))
         .map(|s| {
             let item = items.iter().find(|i| i.id == s.id);
             let task = s.task_id.as_deref().and_then(|id| tasks.get(id).copied());
@@ -51,8 +62,12 @@ pub fn history(input: &Inputs, items: &[Item]) -> Vec<Entry> {
             let folder = s.origin_cwd.as_deref().or(s.cwd.as_deref()).or(task.and_then(|t| t.cwd.as_deref())).unwrap_or("");
             // what the run's last turn said: an earlier turn's sentence is out of date
             let status = record.and_then(|r| r.turns.last()).and_then(|t| t.status_text.clone());
+            let resting = s.rollout.as_deref().and_then(crate::codex::said_at_rest);
             // a chat's last answer, read from its transcript (cached by size)
             let said = || {
+                if let Some(summary) = &resting {
+                    return Some(summary.text.clone()).filter(|text| !text.is_empty());
+                }
                 let cli = s.cli_id.as_deref()?;
                 let path = transcript_of(projects.as_deref()?, cli, s.cwd.as_deref())?;
                 said_of(&path).map(|said| said.text).filter(|t| !t.is_empty())
@@ -66,7 +81,7 @@ pub fn history(input: &Inputs, items: &[Item]) -> Vec<Entry> {
                 title,
                 project: project_of(folder),
                 kind,
-                at: s.last_activity.or(s.created_at).unwrap_or(0.0),
+                at: resting.as_ref().and_then(|summary| summary.at).or(s.last_activity).or(s.created_at).unwrap_or(0.0),
                 state: item.map_or(State::Quiet, |i| i.state),
                 stage: item.map_or(Stage::Done, |i| i.stage),
                 said,

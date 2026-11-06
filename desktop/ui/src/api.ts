@@ -20,7 +20,7 @@ export function useSnapshot() {
   return { snapshot, error }
 }
 
-export const mark = (ids: string[], kind: 'seen' | 'done' | 'open' | 'park' | 'resume' | 'forget') => invoke('mark', { ids, kind })
+export const mark = (ids: string[], kind: 'seen' | 'done' | 'open' | 'park' | 'resume' | 'forget', shown?: number) => invoke('mark', { ids, kind, shown })
 // a chat that did not open says why in the foot a while: the Rust side
 // rejects with a short sentence, such as "Codex is not installed."
 const failures = new Set<(why: string) => void>()
@@ -43,9 +43,6 @@ export function useFailure() {
   return why
 }
 export const openChat = (id: string) => invoke('open_chat', { id }).catch(failed)
-// a parked topic opened in its app, and taken up again only once it opened:
-// one that did not open stays parked
-export const resumeChat = (id: string) => invoke('open_chat', { id }).then(() => mark([id], 'resume')).catch(failed)
 export const setPinned = (pinned: boolean) => invoke<boolean>('set_pinned', { pinned })
 export const closePanel = () => invoke('close_panel')
 export const panelSize = (height: number, width?: number) => invoke('panel_size', { width, height })

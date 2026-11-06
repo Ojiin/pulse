@@ -2951,6 +2951,8 @@ dependencies = [
  "chrono",
  "libc",
  "notify",
+ "objc2-app-kit",
+ "objc2-foundation",
  "png 0.17.16",
  "rusqlite",
  "rusty-leveldb",

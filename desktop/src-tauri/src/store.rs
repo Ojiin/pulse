@@ -22,6 +22,9 @@ pub enum MarkKind {
 pub struct Mark {
     pub kind: MarkKind,
     pub at: f64,
+    // how far the item had come when it was marked: what came after is not covered
+    #[serde(default)]
+    pub shown: Option<f64>,
 }
 
 // a topic set aside, with a copy of what it was, so that it outlives its
@@ -68,6 +71,8 @@ pub struct Store {
     pub parked: HashMap<String, Parked>,
     // taken up again in the panel while the session's last answer still says parked
     pub resumed: HashMap<String, f64>,
+    // answers that came with nobody at the app, by session (items.rs)
+    pub unseen: HashMap<String, f64>,
     // where the person moved the panel (its top left, in pixels of the screen);
     // none: below the menu bar item
     pub panel_at: Option<[i32; 2]>,

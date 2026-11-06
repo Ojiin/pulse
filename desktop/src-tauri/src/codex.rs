@@ -73,6 +73,21 @@ static CACHE: LazyLock<Mutex<HashMap<PathBuf, Cached>>> = LazyLock::new(Default:
 // the rollouts the last read looked at, for the check between refreshes
 static RECENT: LazyLock<Mutex<BTreeSet<PathBuf>>> = LazyLock::new(Default::default);
 
+// History reads old rollouts on demand, without adding them to the live cache or
+// the paths watched between refreshes. A rewritten file must be read again even
+// when its size and creation time stayed the same.
+#[derive(Clone)]
+pub struct HistorySummary {
+    pub text: String,
+    pub at: Option<f64>,
+}
+
+type FileStamp = (u64, Option<SystemTime>, Option<SystemTime>);
+type Resting = (FileStamp, Option<HistorySummary>);
+static RESTING: LazyLock<Mutex<HashMap<PathBuf, Resting>>> = LazyLock::new(Default::default);
+#[cfg(test)]
+static HISTORY_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 // Windows writes long paths with \\?\ before them, a share's as \\?\UNC\server\share
 fn plain(path: &str) -> String {
     if let Some(share) = path.strip_prefix(r"\\?\UNC\") {
@@ -369,6 +384,12 @@ fn unpacked(zst: &Path) -> Option<Turn> {
     if let Some((_, _, turn)) = CACHE.lock().expect("codex cache").get(zst).filter(|(read, at, _)| *read == size && *at == made) {
         return Some(turn.clone());
     }
+    let turn = decode(zst)?;
+    CACHE.lock().expect("codex cache").insert(zst.to_path_buf(), (size, made, turn.clone()));
+    Some(turn)
+}
+
+fn decode(zst: &Path) -> Option<Turn> {
     let decoder = ruzstd::decoding::StreamingDecoder::new(File::open(zst).ok()?).ok()?;
     let mut reader = BufReader::with_capacity(CHUNK as usize, decoder);
     let (mut turn, mut line) = (Turn::default(), Vec::new());
@@ -380,8 +401,53 @@ fn unpacked(zst: &Path) -> Option<Turn> {
         }
         line.clear();
     }
-    CACHE.lock().expect("codex cache").insert(zst.to_path_buf(), (size, made, turn.clone()));
     Some(turn)
+}
+
+// The same sentence for a live or resting thread: an interrupted turn must not
+// reuse the answer from the turn before it.
+fn told(turn: &Turn) -> (Option<Said>, String) {
+    let message = turn.last_message.as_deref().unwrap_or("");
+    let said = if turn.aborted { None } else { status_of(message) };
+    let detail = match (&said, turn.aborted) {
+        (_, true) => "Interrupted".to_string(),
+        (Some(s), _) if !s.text.is_empty() => s.text.clone(),
+        _ => conclusion(message),
+    };
+    (said, detail)
+}
+
+pub fn said_at_rest(rollout: &Path) -> Option<HistorySummary> {
+    let (path, meta, compressed) = match std::fs::metadata(rollout) {
+        Ok(meta) => (rollout.to_path_buf(), meta, false),
+        Err(_) => {
+            let zst = packed(rollout);
+            let meta = std::fs::metadata(&zst).ok()?;
+            (zst, meta, true)
+        }
+    };
+    let stamp = (meta.len(), meta.created().ok(), meta.modified().ok());
+    if let Some((_, summary)) = RESTING.lock().expect("codex history cache").get(&path).filter(|(at, _)| *at == stamp) {
+        return summary.clone();
+    }
+    #[cfg(test)]
+    HISTORY_READS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let turn = if compressed {
+        decode(&path)
+    } else {
+        last_answer(&path, meta.len()).ok().and_then(|from| {
+            let mut turn = Turn::default();
+            read_on(&path, from, &mut turn).ok().map(|_| turn)
+        })
+    };
+    let summary = turn.map(|turn| HistorySummary { text: told(&turn).1, at: turn.ended.or(turn.last_at) });
+    RESTING.lock().expect("codex history cache").insert(path, (stamp, summary.clone()));
+    summary
+}
+
+// an answer that ends in a question, its emphasis left aside: "**Go on?**", "_Go on?_"
+fn ends_in_question(message: &str) -> bool {
+    message.trim_end_matches(|c: char| c.is_whitespace() || matches!(c, '*' | '_')).ends_with('?')
 }
 
 // the answer's last paragraph: where a turn says what came of it
@@ -508,11 +574,16 @@ pub fn read(codex: &Path, inputs: &mut Inputs) {
         }
     };
     let mut seen = BTreeSet::new();
+    let mut resting = BTreeSet::new();
     for t in list {
         let id = format!("{PREFIX}{}", t.id);
         // only a recent thread's rollout is read; older ones are listed for the
         // history and what is parked, and the panel leaves the rest out
         let recent = !t.archived && t.updated_at.is_some_and(|at| at > now - WINDOW_MS);
+        if !recent {
+            resting.insert(t.rollout.clone());
+            resting.insert(packed(&t.rollout));
+        }
         let turn = if recent {
             seen.insert(t.rollout.clone());
             turn_of(&t.rollout).or_else(|| {
@@ -533,16 +604,9 @@ pub fn read(codex: &Path, inputs: &mut Inputs) {
         };
         let running = turn.running && now - turn.last_at.unwrap_or(0.0) < STALE_MS;
         let message = turn.last_message.as_deref().unwrap_or("");
-        // a STATUS line, if Codex was asked for one (AGENTS.md), says it as for a
-        // chat; an interrupted turn's is the answer before, not what came of it
-        let said = if turn.aborted { None } else { status_of(message) };
-        let detail = match (&said, turn.aborted) {
-            (_, true) => "Interrupted".to_string(),
-            (Some(s), _) if !s.text.is_empty() => s.text.clone(),
-            _ => conclusion(message),
-        };
+        let (said, detail) = told(&turn);
         // without one, an answer that ends in a question asks the person something
-        let asks = said.is_none() && !turn.aborted && message.trim_end().ends_with('?');
+        let asks = said.is_none() && !turn.aborted && ends_in_question(message);
         if running {
             inputs.running.insert(id.clone());
             inputs.in_turn.insert(id.clone());
@@ -562,6 +626,7 @@ pub fn read(codex: &Path, inputs: &mut Inputs) {
             // name, or none for a chat's own folder
             origin_cwd: t.project,
             archived: t.archived,
+            rollout: (!recent).then_some(t.rollout),
             created_at: t.created_at,
             // from when its last turn ended (one running or cut off: its last
             // event); a thread not read, from when its last turn started
@@ -572,6 +637,7 @@ pub fn read(codex: &Path, inputs: &mut Inputs) {
     }
     // a thread no longer read (archived, quiet too long) leaves the cache
     CACHE.lock().expect("codex cache").retain(|path, _| seen.contains(path));
+    RESTING.lock().expect("codex history cache").retain(|path, _| resting.contains(path));
     *RECENT.lock().expect("codex recent") = seen;
 }
 
@@ -943,6 +1009,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // an answer that ends in a question asks, in bold or italics too
+    #[test]
+    fn an_answer_in_emphasis_that_ends_in_a_question_asks() {
+        let _one = one_at_a_time();
+        let now = crate::util::now_ms().floor();
+        let (dir, db) = codex_home("question");
+        let long = format!("{} should I go on?", "word ".repeat(60));
+        let cases = [
+            ("plain", "Done.\n\nShould I proceed?".to_string()),
+            ("bold", "Done.\n\n**Should I proceed?**".to_string()),
+            ("italic", "Done.\n\n_Should I proceed?_".to_string()),
+            ("long", format!("Done.\n\n{long}")),
+            ("trailing", "**Should I proceed?** ".to_string()),
+        ];
+        for (id, message) in &cases {
+            let path = dir.join(format!("{id}.jsonl"));
+            write_lines(&path, &[event_at("task_complete", serde_json::json!({ "last_agent_message": message }), now - 60_000.0)]);
+            add_thread(&db, id, &path, now - 120_000.0, "user");
+        }
+        let mut inputs = Inputs::empty(now);
+        read(&dir, &mut inputs);
+        assert_eq!(inputs.sessions.len(), cases.len());
+        for s in &inputs.sessions {
+            assert!(!s.summary.needs_action.is_empty(), "{}", s.id);
+        }
+        assert!(!ends_in_question("Done.") && !ends_in_question("**Done.**") && !ends_in_question("?x"));
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // what Codex writes after the answer, an item that came back late or the
     // thread's settings when it opens it again an hour on, leaves it as it was
     #[test]
@@ -1064,6 +1160,173 @@ mod tests {
         // the next read (the history's, say) reads the same, and keeps it
         read(&dir, &mut Inputs::empty(crate::util::now_ms()));
         assert!(cached(&recent));
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn history_reads_old_archived_and_compressed_answers_without_changing_live_state() {
+        let _one = one_at_a_time();
+        let now = crate::util::now_ms().floor();
+        let old_at = now - WINDOW_MS - 60_000.0;
+        let (dir, db) = codex_home("history");
+        let thread = |id: &str, at: f64, answer: &str| {
+            let path = dir.join(format!("{id}.jsonl"));
+            write_lines(&path, &[
+                event_at("task_started", serde_json::json!({}), at),
+                event_at("task_complete", serde_json::json!({ "last_agent_message": answer }), at + 20_000.0),
+            ]);
+            add_thread(&db, id, &path, at, "user");
+            path
+        };
+        let recent = thread("recent", now - 60_000.0, "A recent answer.");
+        let old = thread("old", old_at, "Details.\n\nSTATUS: worked | The report is ready.");
+        let archived = thread("archived", now - 90_000.0, "An earlier answer.");
+        write_lines(&archived, &[
+            event_at("task_complete", serde_json::json!({ "last_agent_message": "An earlier answer." }), now - 80_000.0),
+            event_at("task_started", serde_json::json!({}), now - 75_000.0),
+            event_at("turn_aborted", serde_json::json!({}), now - 70_000.0),
+        ]);
+        db.execute("UPDATE threads SET archived = 1 WHERE id = 'archived'", []).expect("archive");
+        let compressed = thread("compressed", old_at - 60_000.0, "Details.\n\nThe archived report is ready.");
+        let text = std::fs::read(&compressed).expect("read");
+        std::fs::write(packed(&compressed), ruzstd::encoding::compress_to_vec(text.as_slice(), ruzstd::encoding::CompressionLevel::Fastest)).expect("compress");
+        std::fs::remove_file(&compressed).expect("remove plain");
+        RESTING.lock().expect("cache").clear();
+
+        let mut inputs = Inputs::empty(now);
+        read(&dir, &mut inputs);
+        assert!(RESTING.lock().expect("cache").is_empty());
+        let before = serde_json::to_value(crate::items::build(&inputs, &crate::store::Store::default(), 0)).expect("snapshot");
+        let history = crate::history::history(&inputs, &[]);
+        let entry = |id: &str| history.iter().find(|e| e.id == format!("{PREFIX}{id}")).expect("entry");
+        assert_eq!((entry("old").said.as_str(), entry("old").at), ("The report is ready.", old_at + 20_000.0));
+        assert_eq!((entry("archived").said.as_str(), entry("archived").at), ("Interrupted", now - 70_000.0));
+        assert!(entry("archived").archived);
+        assert_eq!((entry("compressed").said.as_str(), entry("compressed").at), ("The archived report is ready.", old_at - 40_000.0));
+        assert_eq!(entry("recent").said, "A recent answer.");
+        assert_eq!(history.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), vec!["codex_recent", "codex_archived", "codex_old", "codex_compressed"]);
+        assert!(inputs.running.is_empty() && inputs.in_turn.is_empty() && inputs.live.is_empty());
+        assert_eq!(serde_json::to_value(crate::items::build(&inputs, &crate::store::Store::default(), 0)).expect("snapshot"), before);
+        assert_eq!(*RECENT.lock().expect("recent"), BTreeSet::from([recent]));
+        assert!(!CACHE.lock().expect("cache").contains_key(&old));
+
+        let reads = HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst);
+        let mut refreshed = Inputs::empty(now);
+        read(&dir, &mut refreshed);
+        crate::history::history(&refreshed, &[]);
+        assert_eq!(HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst), reads);
+        // A resumed thread and a removed thread no longer belong to this cache.
+        db.execute("UPDATE threads SET recency_at_ms = ?1 WHERE id = 'old'", [now as i64]).expect("resume");
+        db.execute("DELETE FROM threads WHERE id = 'archived'", []).expect("delete");
+        read(&dir, &mut Inputs::empty(now));
+        let cached = RESTING.lock().expect("cache");
+        assert!(!cached.contains_key(&old) && !cached.contains_key(&archived));
+        assert!(cached.contains_key(&packed(&compressed)));
+        drop(cached);
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parking_an_old_thread_reads_only_its_answer() {
+        let _one = one_at_a_time();
+        let now = crate::util::now_ms().floor();
+        let old_at = now - WINDOW_MS - 60_000.0;
+        let (dir, db) = codex_home("park-history");
+        let mut paths = Vec::new();
+        for id in ["chosen", "other"] {
+            let path = dir.join(format!("{id}.jsonl"));
+            write_lines(&path, &[event_at("task_complete", serde_json::json!({ "last_agent_message": format!("The {id} answer.") }), old_at + 20_000.0)]);
+            add_thread(&db, id, &path, old_at, "user");
+            paths.push(path);
+        }
+        RESTING.lock().expect("cache").clear();
+        let mut inputs = Inputs::empty(now);
+        read(&dir, &mut inputs);
+        let reads = HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst);
+        // This is the same selected-entry conversion used by history_entries
+        // before mark stores a parked card's title, project and sentence.
+        let chosen = crate::history::selected(&inputs, &[], &["codex_chosen"]);
+        assert_eq!(chosen.len(), 1);
+        assert_eq!((chosen[0].said.as_str(), chosen[0].at), ("The chosen answer.", old_at + 20_000.0));
+        assert_eq!(HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst), reads + 1);
+        let cached = RESTING.lock().expect("cache");
+        assert!(cached.contains_key(&paths[0]) && !cached.contains_key(&paths[1]));
+        drop(cached);
+        let full = crate::history::history(&inputs, &[]);
+        assert_eq!(full.iter().find(|e| e.id == "codex_chosen").expect("chosen").said, chosen[0].said);
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resting_answers_follow_rewrites_and_plain_or_compressed_sources() {
+        let _one = one_at_a_time();
+        let (dir, db) = codex_home("history-sources");
+        let path = dir.join("answer.jsonl");
+        let write = |answer: &str| write_lines(&path, &[event("task_complete", serde_json::json!({ "last_agent_message": answer }))]);
+        let text = || said_at_rest(&path).map(|s| s.text);
+        RESTING.lock().expect("cache").clear();
+        write("First answer.");
+        let size = std::fs::metadata(&path).expect("meta").len();
+        assert_eq!(text().as_deref(), Some("First answer."));
+        write("Other answer.");
+        assert_eq!(std::fs::metadata(&path).expect("meta").len(), size);
+        // A deterministic metadata change, including on coarse filesystems.
+        File::options().write(true).open(&path).expect("open").set_times(std::fs::FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(1_900_000_000))).expect("mtime");
+        assert_eq!(text().as_deref(), Some("Other answer."));
+        let plain = std::fs::read(&path).expect("read");
+        let zst = packed(&path);
+        let compressed = ruzstd::encoding::compress_to_vec(plain.as_slice(), ruzstd::encoding::CompressionLevel::Fastest);
+        std::fs::write(&zst, &compressed).expect("compress");
+        std::fs::remove_file(&path).expect("remove plain");
+        assert_eq!(text().as_deref(), Some("Other answer."));
+        let reads = HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(text().as_deref(), Some("Other answer."));
+        assert_eq!(HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst), reads);
+        write("A newer plain answer.");
+        assert_eq!(text().as_deref(), Some("A newer plain answer."));
+        std::fs::remove_file(&path).expect("remove plain");
+        std::fs::write(&zst, b"broken zstd").expect("corrupt");
+        assert!(text().is_none());
+        let reads = HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(text().is_none());
+        assert_eq!(HISTORY_READS.load(std::sync::atomic::Ordering::SeqCst), reads);
+        std::fs::write(&zst, &compressed).expect("restore");
+        assert_eq!(text().as_deref(), Some("Other answer."));
+        std::fs::remove_file(&zst).expect("remove compressed");
+        assert!(text().is_none());
+        write("Recovered answer.");
+        assert_eq!(text().as_deref(), Some("Recovered answer."));
+        drop(db);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // a compressed rollout cut off in its stream keeps the turn read up to there,
+    // and the cache keeps it: it is not unpacked again on every refresh
+    #[test]
+    fn a_rollout_cut_off_in_its_stream_keeps_the_turn_before() {
+        let _one = one_at_a_time();
+        let (dir, db) = codex_home("cut");
+        let path = dir.join("cut.jsonl");
+        // more than the reader's chunk before the cut, in many blocks
+        let mut lines = vec![event("task_complete", serde_json::json!({ "last_agent_message": "The answer before the cut." }))];
+        lines.extend((0..40_000).map(|n| serde_json::json!({ "type": "response_item", "payload": { "n": n, "text": "some output of a long command" } })));
+        lines.push(event("task_complete", serde_json::json!({ "last_agent_message": "The answer after the cut." })));
+        write_lines(&path, &lines);
+        let plain = std::fs::read(&path).expect("read");
+        assert!(plain.len() as u64 > 2 * CHUNK);
+        let compressed = ruzstd::encoding::compress_to_vec(plain.as_slice(), ruzstd::encoding::CompressionLevel::Fastest);
+        let zst = packed(&path);
+        std::fs::write(&zst, &compressed[..compressed.len() * 3 / 4]).expect("cut");
+        std::fs::remove_file(&path).expect("remove plain");
+        CACHE.lock().expect("cache").clear();
+        RESTING.lock().expect("cache").clear();
+        let turn = unpacked(&zst).expect("the turn before the cut");
+        assert_eq!(turn.last_message.as_deref(), Some("The answer before the cut."));
+        assert!(CACHE.lock().expect("cache").contains_key(&zst));
+        assert_eq!(said_at_rest(&path).map(|s| s.text).as_deref(), Some("The answer before the cut."));
         drop(db);
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -9,6 +9,7 @@ mod background;
 mod checks;
 mod codex;
 mod cron;
+mod front;
 mod history;
 mod inputs;
 mod items;
@@ -61,8 +62,15 @@ fn tz_offset_min() -> i64 {
 
 fn compute() -> Result<Snapshot, String> {
     let inputs = inputs::load_inputs()?;
-    let store = STORE.lock().expect("store");
+    let mut store = STORE.lock().expect("store");
     let mut snap = items::build(&inputs, &store, tz_offset_min());
+    let before = LAST.lock().expect("last").as_ref().map(|s| s.items.clone()).unwrap_or_default();
+    if items::sync_unseen(&snap.items, &before, &mut store, front::claude_in_front()) {
+        snap = items::build(&inputs, &store, tz_offset_min());
+        if let Err(error) = save(&store) {
+            eprintln!("store: {error}");
+        }
+    }
     let (settings, problem) = SETTINGS.lock().expect("settings").clone();
     if let Some(problem) = problem {
         snap.problems.push(format!("Settings unreadable, the defaults apply: {problem}"));
@@ -130,7 +138,7 @@ async fn snapshot() -> Result<Snapshot, String> {
 // park sets a topic aside with a copy of what it is, resume takes it up again,
 // forget drops the note of one whose session is gone
 #[tauri::command]
-async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), String> {
+async fn mark(app: AppHandle, ids: Vec<String>, kind: String, shown: Option<f64>) -> Result<(), String> {
     if ids.len() > 500 || ids.iter().any(|id| !is_app_id(id)) {
         return Err("ids".into());
     }
@@ -140,15 +148,25 @@ async fn mark(app: AppHandle, ids: Vec<String>, kind: String) -> Result<(), Stri
         // the store is taken: that reads all the inputs, the processes too, and
         // the panel's moves and its closing wait for the store
         let lookups = park_lookups(&kind, &ids, |id| last.as_ref().is_some_and(|s| s.items.iter().any(|i| i.id == id)));
-        let entries = if lookups.is_empty() { HashMap::new() } else { history_entries(&lookups) };
+        let entries = if lookups.is_empty() {
+            HashMap::new()
+        } else {
+            let lookups: Vec<String> = lookups.into_iter().map(str::to_owned).collect();
+            tauri::async_runtime::spawn_blocking(move || {
+                let ids: Vec<&str> = lookups.iter().map(String::as_str).collect();
+                history_entries(&ids)
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        };
         let mut store = STORE.lock().expect("store");
         for id in ids {
             match kind.as_str() {
                 "seen" => {
-                    store.marks.insert(id, Mark { kind: MarkKind::Seen, at: now_ms() });
+                    store.marks.insert(id, Mark { kind: MarkKind::Seen, at: now_ms(), shown });
                 }
                 "done" => {
-                    store.marks.insert(id, Mark { kind: MarkKind::Done, at: now_ms() });
+                    store.marks.insert(id, Mark { kind: MarkKind::Done, at: now_ms(), shown });
                 }
                 "open" => {
                     store.marks.remove(&id);
@@ -268,6 +286,7 @@ fn open_chat(app: AppHandle, id: String) -> Result<(), String> {
     if !panel::PINNED.load(Ordering::SeqCst) && !panel::COMPACT.load(Ordering::SeqCst) {
         panel::hide(&app);
     }
+    STORE.lock().expect("store").unseen.remove(&id);
     open(&[&link])
 }
 
@@ -282,7 +301,7 @@ fn park_lookups<'a>(kind: &str, ids: &'a [String], is_shown: impl Fn(&str) -> bo
 // those sessions as the Verlauf has them, from one read of the inputs
 fn history_entries(ids: &[&str]) -> HashMap<String, history::Entry> {
     let Ok(inputs) = inputs::load_inputs() else { return HashMap::new() };
-    history::history(&inputs, &[]).into_iter().filter(|e| ids.contains(&e.id.as_str())).map(|e| (e.id.clone(), e)).collect()
+    history::selected(&inputs, &[], ids).into_iter().map(|e| (e.id.clone(), e)).collect()
 }
 
 // Verlauf: every session the app keeps, newest first, as the panel shows them now
