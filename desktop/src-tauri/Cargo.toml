@@ -24,6 +24,8 @@ ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
 
 [target.'cfg(windows)'.dependencies]
 tauri-plugin-single-instance = "2"

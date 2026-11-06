@@ -100,7 +100,10 @@ running → open → done. Open is one of two kinds:
 
 - a **result** (the work is finished, there is only something to read): once
   you opened it in its app (Claude or Codex) it is done, or you close it with
-  *Done*; a Codex CLI result is done at once, as it was read in the terminal;
+  *Done*; a Codex CLI result is done at once, as it was read in the terminal.
+  Claude's unread dot says what was read, but it gives none to the session it
+  has on show, so an answer that ends with Claude not in front counts as unread
+  too;
 - something that **needs you** (a question, a decision, points still open, or
   a block): reading it settles nothing. It stays open until you close it with
   *Done* or the session goes on and says something new; *Later* sets it
@@ -151,11 +154,11 @@ use *Park* on its line in the panel (in *Open* or *History*).
 Parked topics sit folded at the bottom of *Open* with where they stand; they
 count nowhere and send no notification, only on Mondays the morning summary
 names them. Pulse keeps its own note of each, so it stays however old, also
-archived, and as a note when the app no longer keeps the session. Writing in
-the session again takes it up again, as does *Resume*. *Resume* takes it up
-only once its chat has opened: when the chat cannot be opened (for example,
-Claude or Codex is not installed), the topic stays parked; on Windows the foot
-of the panel says why.
+archived, and as a note when the app no longer keeps the session. A click
+opens the session in its app (Claude or Codex) to look at it and it stays
+parked; it ends when the session goes on or with *Unpark*, which puts it back
+in *Open*. When a chat cannot be opened (for example, Claude or Codex is not
+installed), on Windows the foot of the panel says why.
 
 ## What it reads and writes
 

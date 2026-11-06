@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { mark, markCommand, openChat, resumeChat } from './api'
+import { mark, markCommand, openChat } from './api'
 import { ageLevel, ago, clock, elapsed, since } from './format'
 import { Disc, Glyph, STATE_LABEL, markOf, typeOf } from './glyphs'
 import type { Mark, Type } from './glyphs'
@@ -118,10 +118,10 @@ export function Row({ item, now, from }: { item: Item; now: number; from?: strin
       <span className="right">
         {item.stage === 'running' ? <span className="age run">running</span> : isDone ? <span className="age">{clock(item.since)}</span> : <Age t={item.since} now={now} />}
         <span className="acts">
-          {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen')} />}
-          {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done')} />}
+          {item.stage === 'open' && item.state !== 'review' && <Action glyph="follow" label="Later: read, stays open" onClick={() => void mark([item.id], 'seen', item.since)} />}
+          {(item.stage === 'open' || item.stage === 'follow') && <Action glyph="check" label="Done" onClick={() => void mark([item.id], 'done', item.since)} />}
           {item.stage === 'parked' ? (
-            <Action glyph="external" label={`Resume: open in ${appOf(item.id)}`} onClick={() => void resumeChat(item.id)} />
+            <Action glyph="unpark" label="Unpark" onClick={() => void mark([item.id], 'resume')} />
           ) : (
             item.stage !== 'running' && <Action glyph="parked" label="Park: keep it in mind" onClick={() => void mark([item.id], 'park')} />
           )}
@@ -233,12 +233,12 @@ export function CheckRow({ check, now }: { check: Check; now: number }) {
   )
 }
 
-// a topic set aside: what it is, where it stands, since when; a click takes it
-// up again in its app; a note whose session is gone can only be dropped
+// a topic set aside: what it is, where it stands, since when; a click opens it
+// in its app to look, and it stays parked until it is unparked or goes on; a
+// note whose session is gone can only be dropped
 export function ParkedRow({ parked: p, now, type }: { parked: ParkedView; now: number; type?: Type }) {
-  const resume = () => void resumeChat(p.id)
   return (
-    <div className={`row ${p.gone ? 'dim' : ''}`} title={p.gone ? 'The app no longer has this session' : `Resume: open in ${appOf(p.id)}`} onClick={() => !p.gone && resume()}>
+    <div className={`row ${p.gone ? 'dim' : ''}`} title={p.gone ? 'The app no longer has this session' : `Open in ${appOf(p.id)}`} onClick={() => !p.gone && void openChat(p.id)}>
       <Disc mark="parked" type={type} />
       <b className="title" dir="auto" title={p.title}>
         {p.title}
@@ -251,7 +251,7 @@ export function ParkedRow({ parked: p, now, type }: { parked: ParkedView; now: n
           {p.gone ? (
             <Action glyph="close" label="Remove note" onClick={() => void mark([p.id], 'forget')} />
           ) : (
-            <Action glyph="external" label={`Resume: open in ${appOf(p.id)}`} onClick={resume} />
+            <Action glyph="unpark" label="Unpark" onClick={() => void mark([p.id], 'resume')} />
           )}
         </span>
       </span>

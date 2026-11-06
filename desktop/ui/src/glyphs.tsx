@@ -12,6 +12,8 @@ const SVG: Record<string, string> = {
   commands: `<path d="M3.2 1.6h11.6M3.2 16.4h11.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.8 2.4h8.4v2.4c0 1.7-1.3 3-3 4.2 1.7 1.2 3 2.5 3 4.2v2.4H4.8v-2.4c0-1.7 1.3-3 3-4.2-1.7-1.2-3-2.5-3-4.2z" fill="currentColor"/><path d="M6.5 4.1h5c-.1.5-.4 1-.8 1.4H7.3c-.4-.4-.7-.9-.8-1.4zM9 11c-1 .6-1.9 1.4-2.3 2.6v.5h4.6v-.5C10.9 12.4 10 11.6 9 11z" fill="var(--knock)"/>`,
   // a topic set aside
   parked: `<circle cx="9" cy="9" r="7.6" fill="currentColor"/><path d="M7 5.9v6.2M11 5.9v6.2" stroke="var(--knock)" stroke-width="2" stroke-linecap="round"/>`,
+  // goes on again: the play to parked's pause
+  unpark: `<path d="M5 2.8v12.4a.8.8 0 001.2.7l10-6.2a.8.8 0 000-1.4l-10-6.2A.8.8 0 005 2.8z" fill="currentColor"/>`,
   done: `<circle cx="9" cy="9" r="7.6" fill="currentColor"/><path d="M5.4 9.3l2.4 2.4 4.8-5" fill="none" stroke="var(--knock)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>`,
   follow: `<path d="M4 1.8v14.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.6 2.6h10l-2.6 3.6 2.6 3.6h-10z" fill="currentColor"/>`,
   missed: `<circle cx="9" cy="9" r="6.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="2.6 2.2"/><path d="M6.4 6.4l5.2 5.2M11.6 6.4l-5.2 5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,

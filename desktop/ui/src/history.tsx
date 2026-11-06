@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getHistory, mark, openChat, resumeChat } from './api'
+import { getHistory, mark, openChat } from './api'
 import { clock, dayName, dayOf } from './format'
 import { Disc, Glyph, markOf, typeOf } from './glyphs'
 import { appOf, Card, Where } from './parts'
@@ -115,14 +115,13 @@ export function HistoryTab({ version, now }: { version: number; now: number }) {
                   <span className="acts">
                     <button
                       className="act"
-                      title={e.stage === 'parked' ? `Resume: open in ${appOf(e.id)}` : 'Park: keep it in mind'}
+                      title={e.stage === 'parked' ? 'Unpark' : 'Park: keep it in mind'}
                       onClick={ev => {
                         ev.stopPropagation()
-                        if (e.stage === 'parked') void resumeChat(e.id)
-                        else void mark([e.id], 'park')
+                        void mark([e.id], e.stage === 'parked' ? 'resume' : 'park')
                       }}
                     >
-                      <Glyph name={e.stage === 'parked' ? 'external' : 'parked'} size={13} />
+                      <Glyph name={e.stage === 'parked' ? 'unpark' : 'parked'} size={13} />
                     </button>
                   </span>
                 )}
