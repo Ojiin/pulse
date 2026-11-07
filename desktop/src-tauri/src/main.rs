@@ -9,6 +9,9 @@ mod background;
 mod checks;
 mod codex;
 mod cron;
+mod drift;
+mod engine;
+mod failed;
 mod front;
 mod history;
 mod inputs;
@@ -16,14 +19,17 @@ mod items;
 mod live;
 mod notify;
 mod panel;
+mod pending;
 mod procs;
 #[cfg(target_os = "macos")]
 mod procs_mac;
 #[cfg(windows)]
 mod procs_win;
+mod rules;
 mod running;
 mod runs;
 mod said;
+mod scrub;
 mod settings;
 mod store;
 mod subagents;
@@ -33,6 +39,7 @@ mod tray;
 mod unread;
 mod util;
 mod watch;
+mod work;
 
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
@@ -75,6 +82,7 @@ fn compute() -> Result<Snapshot, String> {
     if let Some(problem) = problem {
         snap.problems.push(format!("Settings unreadable, the defaults apply: {problem}"));
     }
+    snap.problems.extend(store::problem());
     snap.checks = checks::checks(&inputs, &snap.items, &settings, &store);
     snap.counts.commands = snap.checks.iter().filter(|c| c.flag.is_some() && !c.known).count();
     Ok(snap)
@@ -304,6 +312,25 @@ fn history_entries(ids: &[&str]) -> HashMap<String, history::Entry> {
     history::selected(&inputs, &[], ids).into_iter().map(|e| (e.id.clone(), e)).collect()
 }
 
+// keeps the shape of what an item is now as a case, on this Mac (scrub.rs)
+#[tauri::command]
+async fn save_case(id: String) -> Result<String, String> {
+    if !is_app_id(&id) {
+        return Err("id".into());
+    }
+    let item = LAST.lock().expect("last").as_ref().and_then(|s| s.items.iter().find(|i| i.id == id).cloned()).ok_or("unknown session")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let inputs = inputs::load_inputs()?;
+        let session = inputs.sessions.iter().find(|s| s.id == id).ok_or("unknown session")?;
+        let cli_id = session.cli_id.as_deref().ok_or("no transcript")?;
+        let path = inputs::transcript_of(&util::paths()?.projects, cli_id, session.cwd.as_deref()).ok_or("no transcript")?;
+        let has_process = inputs.commands.iter().any(|c| c.session == cli_id);
+        scrub::save_case(&path, &item, has_process, inputs.engines.by_id.get(cli_id), inputs.stopped.get(cli_id), inputs.now).map(|saved| saved.display().to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // Verlauf: every session the app keeps, newest first, as the panel shows them now
 #[tauri::command]
 async fn history() -> Result<Vec<history::Entry>, String> {
@@ -412,7 +439,7 @@ fn main() {
     builder
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, set_pinned, set_compact, close_panel, panel_size, get_settings, set_settings, mark_command, history, is_placed, reset_place])
+        .invoke_handler(tauri::generate_handler![snapshot, mark, open_chat, save_case, set_pinned, set_compact, close_panel, panel_size, get_settings, set_settings, mark_command, history, is_placed, reset_place])
         .setup(|app| {
             // a menu bar app: no Dock icon, no app menu
             #[cfg(target_os = "macos")]

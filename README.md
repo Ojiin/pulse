@@ -16,6 +16,8 @@ https://github.com/user-attachments/assets/b85c4ad9-4e7a-4367-b419-6594073a9225
   for a Codex thread).
 - **Commands to check:** background commands that run long, run hot, hang or
   were forgotten.
+- **Work that has not landed:** files a session left uncommitted, commits not
+  pushed, a branch without a PR.
 - **Notifications** for what newly needs you and reminders while it lies,
   as you set them; a click opens the session.
 - Park a topic for later, mark things done or read, move the panel anywhere
@@ -25,7 +27,7 @@ It has two parts:
 
 | Part | What it does |
 | --- | --- |
-| [`routine-recorder`](routine-recorder) | A Claude Code plugin. It asks every session to end its answers with a `STATUS:` line (worked, waiting, blocked, idle, parked) and records each scheduled-routine run to `~/.claude/routine-recorder/runs`. |
+| [`routine-recorder`](routine-recorder) | A Claude Code plugin. It asks every session to end its answers with a `STATUS:` line (worked, waiting, blocked, idle, parked), which the app then does not show, records each scheduled-routine run to `~/.claude/routine-recorder/runs` and reports what waits for your approval and which API error ended a turn. |
 | [`desktop`](desktop) | Pulse itself, a Tauri app. It reads the sessions of the Claude desktop app, their transcripts and the records of the plugin. |
 
 ## Windows and Codex
@@ -178,15 +180,18 @@ anywhere.
   (`~/Library/Application Support/Claude/claude-code-sessions`; on Windows see
   [Windows and Codex](#windows-and-codex)), a copy of its
   unread markers, the transcripts in `~/.claude/projects`, the plugin's records,
-  the Codex threads in `~/.codex/state_5.sqlite` and `~/.codex/sessions` (or
-  `CODEX_HOME`) and the process table (for the commands sessions run; on Windows
+  Claude Code's records of its running processes (`~/.claude/sessions`), the
+  Codex threads in `~/.codex/state_5.sqlite` and `~/.codex/sessions` (or
+  `CODEX_HOME`), the process table (for the commands sessions run; on Windows
   the `claude` output files under `CLAUDE_CODE_TMPDIR`, `%TEMP%` and `%TMP%`
-  instead).
+  instead) and `git` in the folders recent sessions worked in (to see work that
+  has not landed). It never fetches, commits or pushes.
 - **Writes:** its own state and settings in
   `~/Library/Application Support/local.claude-dashboard.pulse/` (Windows:
   `%APPDATA%\local.claude-dashboard.pulse`, and the panel's WebView2 profile in
   `%LOCALAPPDATA%\local.claude-dashboard.pulse`); the plugin
-  writes its records to `~/.claude/routine-recorder/runs`.
+  writes its records to `~/.claude/routine-recorder/runs` and what waits for
+  you, by the name of a tool only, to `~/.claude/routine-recorder/pending`.
 
 Pulse reads files of the Claude desktop app that are not a documented
 interface. An update of the app can change them and break Pulse until it is
@@ -217,6 +222,10 @@ How Pulse works, what each state means and how to build and test it:
 [`desktop/README.md`](desktop/README.md). The plugin's tests run with
 `claude plugin test routine-recorder`; Pulse's with `npm test` in `desktop`,
 and the panel's type check with `npm --prefix ui run typecheck` there.
+
+Nothing private may enter this public repository: run `npm run setup` in
+`desktop` once, it turns on the hooks that check every commit and push. How that
+works: [Keeping what is private out of git](desktop/README.md#keeping-what-is-private-out-of-git).
 
 ## License
 

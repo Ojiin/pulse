@@ -285,7 +285,7 @@ mod tests {
     const KEY: &str = "7e3c51a2-0b4d-4c8e-9f61-2a5d8b0c4e17/dev";
 
     fn item(state: State, stage: Stage, since: f64) -> Item {
-        Item { id: "local_a".into(), title: "Fix the build".into(), project: "shop-api".into(), kind: Kind::Chat, state, stage, since, started_at: since, reason: String::new(), parent_id: None, live: None, subagents: vec![], focused: 0.0 }
+        Item { id: "local_a".into(), title: "Fix the build".into(), project: "shop-api".into(), kind: Kind::Chat, state, stage, since, started_at: since, reason: String::new(), parent_id: None, live: None, subagents: vec![], focused: 0.0, work: vec![], why: Default::default() }
     }
 
     fn blocked() -> Item {

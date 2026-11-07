@@ -18,7 +18,8 @@ use std::time::SystemTime;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
-use crate::inputs::{Inputs, Session, WINDOW_MS};
+use crate::inputs::{Inputs, Session};
+use crate::rules::limits::WINDOW_MS;
 use crate::live::Live;
 use crate::runs::Summary;
 use crate::said::{status_of, Said};

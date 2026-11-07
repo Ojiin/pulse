@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import type { RunRecord } from '../hooks/register'
+import { withoutStatus, type RunRecord } from '../hooks/register'
 
 const FILE = '/home/t/.claude/routine-recorder/runs/s1.json'
 // the fs hooks get a path as the engine resolved it, C:\home\t\... on
@@ -31,6 +31,41 @@ function world(on: On, answer: string, env: Readonly<Record<string, string>> = {
   on('turn.complete', () => ({ text: answer }))
   return { files, contexts }
 }
+
+const PENDING = '/home/t/.claude/routine-recorder/pending/s1.json'
+const pendingOf = (files: Map<string, string>) => JSON.parse(files.get(PENDING) ?? 'null')
+
+test('what stands before the person is told while it lasts, by its name only', async ($, on) => {
+  const { files } = world(on, 'Fertig.\nSTATUS: worked | Fertig.')
+  on('classic.PermissionRequest', () => ({}))
+  on('classic.Elicitation', () => ({}))
+  on('classic.ElicitationResult', () => ({}))
+
+  await $.prompt.submit({ text: 'Mach das', wait: false, origin: { kind: 'user' } })
+  await $.turn.start({ text: '', turnId: 't1' })
+  await $.classic.PermissionRequest({ tool_name: 'mcp__mail__send', tool_input: { to: 'secret' } })
+  expect(pendingOf(files)).toEqual([{ tool: 'mcp__mail__send', at: 1000 }])
+  expect(files.get(PENDING)).not.toContain('secret')
+
+  // a call beside it ends: the request still stands
+  await $.tool.call({ tool: 'mcp__plan__update', tool_use_id: 'u0' })
+  expect(pendingOf(files)).toEqual([{ tool: 'mcp__mail__send', at: 1000 }])
+
+  // its own call goes on: nothing stands before the person any more
+  await $.tool.call({ tool: 'mcp__mail__send', tool_use_id: 'u1' })
+  expect(pendingOf(files)).toEqual([])
+
+  await $.classic.Elicitation({ mcp_server_name: 'mail', message: 'secret question' })
+  expect(pendingOf(files)).toEqual([{ tool: 'mcp__', asks: true, at: 1000 }])
+  expect(files.get(PENDING)).not.toContain('secret')
+  await $.classic.ElicitationResult({ mcp_server_name: 'mail' })
+  expect(pendingOf(files)).toEqual([])
+
+  await $.classic.PermissionRequest({ tool_name: 'Bash', agent_id: 'a1' })
+  expect(pendingOf(files)).toEqual([{ tool: 'Bash', agent: 'a1', at: 1000 }])
+  await $.turn.complete({ answer: '', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer' })
+  expect(pendingOf(files)).toEqual([])
+})
 
 const read = (files: Map<string, string>) => JSON.parse(files.get(FILE) ?? 'null') as RunRecord | null
 
@@ -236,13 +271,13 @@ test('without HOME a run is recorded under USERPROFILE', async ($, on) => {
 })
 
 test('on Windows without USERPROFILE a run is recorded under HOME', async ($, on) => {
-  const { files } = world(on, 'Erledigt.\nSTATUS: worked | Bericht liegt bereit.', { OS: 'Windows_NT', HOME: 'C:\\Users\\h' })
+  const { files } = world(on, 'Erledigt.\nSTATUS: worked | Bericht liegt bereit.', { OS: 'Windows_NT', HOME: 'C:\\Users\\me' })
 
   await $.prompt.submit({ text: '<scheduled-task name="ops">\nGo', wait: false, origin: { kind: 'scheduled-trigger' } })
 
   const paths = [...files.keys()]
   expect(paths).toHaveLength(1)
-  expect(paths[0]).toEndWith('/Users/h/.claude/routine-recorder/runs/s1.json')
+  expect(paths[0]).toEndWith('/Users/me/.claude/routine-recorder/runs/s1.json')
 })
 
 test('with no home folder nothing is written, but the run is asked for its STATUS', async ($, on) => {
@@ -259,7 +294,7 @@ test('with no home folder nothing is written, but the run is asked for its STATU
 
 test('a webhook posted through PowerShell is a ping, as through Bash', async ($, on) => {
   const { files } = world(on, 'Team benachrichtigt.\nSTATUS: worked | Bericht gepostet.')
-  const hook = 'https://discord.com/api/webhooks/1/abc'
+  const hook = 'https://discord.com/api/webhooks/id/abc'
 
   await $.prompt.submit({ text: '<scheduled-task name="ops">\nGo', wait: false, origin: { kind: 'scheduled-trigger' } })
   await $.turn.start({ text: '', turnId: 't1' })
@@ -309,4 +344,51 @@ test('an emoji on a cut is kept whole, never half of it', async ($, on) => {
   const turn = read(files)?.turns[0]
   expect(turn?.answerTail).toStartWith('\u{1F534}y')
   expect(turn?.pings.at(-1)?.detail).toBe(`${'p'.repeat(199)}\u{1F680}`)
+})
+
+const FAILED = '/home/t/.claude/routine-recorder/failed/s1.json'
+
+test('an API error that ends a turn is told by its kind until the next turn', async ($, on) => {
+  const { files } = world(on, 'Fertig.\nSTATUS: worked | Fertig.')
+  on('classic.StopFailure', () => ({}))
+
+  await $.turn.start({ text: '', turnId: 't1' })
+  expect(files.has(FAILED)).toBe(false)
+  await $.classic.StopFailure({ error: 'rate_limit', error_details: 'secret', last_assistant_message: 'secret' })
+  expect(JSON.parse(files.get(FAILED) ?? 'null')).toEqual({ error: 'rate_limit', at: 1000 })
+  expect(files.get(FAILED)).not.toContain('secret')
+
+  await $.classic.StopFailure({ error: 'overloaded', agent_id: 'a1' })
+  expect(JSON.parse(files.get(FAILED) ?? 'null')).toEqual({ error: 'rate_limit', at: 1000 })
+
+  await $.turn.start({ text: '', turnId: 't2' })
+  expect(JSON.parse(files.get(FAILED) ?? '{}')).toBe(null)
+})
+
+test('what is shown of an answer leaves out the STATUS line it ends with', async ($, on) => {
+  expect(withoutStatus('Fertig.\n\nSTATUS: worked | Alles da.')).toBe('Fertig.')
+  expect(withoutStatus('Fertig.\n\nSTATUS: waiting | Eine Frage offen.\n')).toBe('Fertig.')
+  expect(withoutStatus('STATUS: idle | Nichts zu tun.')).toBe('')
+  expect(withoutStatus('Die Zeile `STATUS: worked` steht im Satz.')).toBe('Die Zeile `STATUS: worked` steht im Satz.')
+  const quoted = 'So sieht es aus:\nSTATUS: worked | Beispiel\n\nDanach geht es weiter.'
+  expect(withoutStatus(quoted)).toBe(quoted)
+
+  on('classic.MessageDisplay', () => ({}))
+  const end = { turn_id: 't1', message_id: 'm1', index: 0, final: true }
+  expect(await $.classic.MessageDisplay({ ...end, delta: 'Fertig.\n\nSTATUS: worked | Alles da.' })).toEqual({ displayContent: 'Fertig.' })
+  expect(await $.classic.MessageDisplay({ ...end, delta: 'Ohne Zeile.' })).toEqual({})
+  expect(await $.classic.MessageDisplay({ ...end, final: false, delta: 'STATUS: worked | Mitten drin' })).toEqual({})
+})
+
+test('a call the engine sends to be asked for is told, for the app to ask in its own dialog', async ($, on) => {
+  const { files } = world(on, 'Fertig.\nSTATUS: worked | Fertig.')
+
+  await $.prompt.submit({ text: 'Mach das', wait: false, origin: { kind: 'user' } })
+  await $.turn.start({ text: '', turnId: 't1' })
+  await $.tool.check({ tool: 'mcp__Claude_Browser__preview_start', input: { name: 'secret' }, tool_use_id: 'u1' })
+  expect(pendingOf(files)).toEqual([{ tool: 'mcp__Claude_Browser__preview_start', checked: true, at: 1000 }])
+  expect(files.get(PENDING)).not.toContain('secret')
+
+  await $.tool.call({ tool: 'mcp__Claude_Browser__preview_start', tool_use_id: 'u1' })
+  expect(pendingOf(files)).toEqual([])
 })

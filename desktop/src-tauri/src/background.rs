@@ -13,10 +13,9 @@ use std::sync::{LazyLock, Mutex};
 
 use serde_json::Value;
 
+use crate::rules::limits::WORKFLOW_MAX_AGE_MS;
 use crate::util::{parse_time, read_tail};
 
-// a workflow started longer ago is taken as gone (the app was closed, the Mac slept)
-const MAX_AGE_MS: f64 = 12.0 * 3_600_000.0;
 // what the result of a Workflow call says when the workflow went to the
 // background, on this machine or in a remote session
 const LAUNCHED: [&str; 2] = ["Workflow launched in background. Task ID: ", "Workflow launched in a remote CCR session. Task ID: "];
@@ -228,7 +227,7 @@ pub fn background_of(transcript: &Path, now: f64, alive: &HashSet<&str>) -> Back
     let mut open: Vec<Task> = scan
         .open
         .into_iter()
-        .filter(|(id, t)| if t.workflow { now - t.started < MAX_AGE_MS && t.expires.is_none_or(|e| e > now) } else { alive.contains(id.as_str()) })
+        .filter(|(id, t)| if t.workflow { now - t.started < WORKFLOW_MAX_AGE_MS && t.expires.is_none_or(|e| e > now) } else { alive.contains(id.as_str()) })
         .map(|(_, t)| t)
         .collect();
     open.sort_by(|a, b| a.started.total_cmp(&b.started));
@@ -240,6 +239,9 @@ mod tests {
     use std::io::Write as _;
 
     use super::*;
+
+    // the record of a call's result is spelt tool_use_result here, as the private
+    // check asks (tools/check_private.py): the scan reads no field of it by name
 
     fn scan(lines: &[&str]) -> Scan {
         let mut s = Scan::default();
@@ -288,7 +290,7 @@ mod tests {
     // a Workflow call and its result as Claude Code 2.1.309 writes them: the
     // task is "w…", only the run is "wf_…"
     const FLOW: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01ExampleFlowCall0000001","name":"Workflow","input":{"script":"export default async function () {}"}}]}}"#;
-    const LAUNCH: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleFlowCall0000001","type":"tool_result","content":"Workflow launched in background. Task ID: w2abcdefg\nSummary: Review the uncommitted shop-api importer changes: 4 area reviewers, 2-lens verification per finding, a final sweep\nTranscript dir: C:\\Users\\me\\.claude\\projects\\p\\s\\subagents\\workflows\\wf_0a1b2c3d-4e5\nScript file: C:\\Users\\me\\.claude\\projects\\p\\s\\workflows\\scripts\\example-review-wf_0a1b2c3d-4e5.js\n(Edit this file with Write/Edit and re-invoke Workflow with {scriptPath: \"C:\\Users\\me\\.claude\\projects\\p\\s\\workflows\\scripts\\example-review-wf_0a1b2c3d-4e5.js\"} to iterate.)\n\nYou will be notified when it completes.","is_error":false}]},"uuid":"u1","timestamp":"2026-10-30T11:00:00.000Z","toolUseResult":{"status":"async_launched","taskId":"w2abcdefg","taskType":"local_workflow","runId":"wf_0a1b2c3d-4e5"}}"#;
+    const LAUNCH: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleFlowCall0000001","type":"tool_result","content":"Workflow launched in background. Task ID: w2abcdefg\nSummary: Review the uncommitted shop-api importer changes: 4 area reviewers, 2-lens verification per finding, a final sweep\nTranscript dir: C:\\Users\\me\\.claude\\projects\\p\\s\\subagents\\workflows\\wf_0a1b2c3d-4e5\nScript file: C:\\Users\\me\\.claude\\projects\\p\\s\\workflows\\scripts\\example-review-wf_0a1b2c3d-4e5.js\n(Edit this file with Write/Edit and re-invoke Workflow with {scriptPath: \"C:\\Users\\me\\.claude\\projects\\p\\s\\workflows\\scripts\\example-review-wf_0a1b2c3d-4e5.js\"} to iterate.)\n\nYou will be notified when it completes.","is_error":false}]},"uuid":"u1","timestamp":"2026-10-30T11:00:00.000Z","tool_use_result":{"status":"async_launched","taskId":"w2abcdefg","taskType":"local_workflow","runId":"wf_0a1b2c3d-4e5"}}"#;
     const FINISHED: &str = r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-30T12:00:00.000Z","content":"<task-notification>\n<task-id>w2abcdefg</task-id>\n<tool-use-id>toolu_01ExampleFlowCall0000001</tool-use-id>\n<status>completed</status>\n<summary>Dynamic workflow \"Review the uncommitted…\" completed</summary>\n</task-notification>"}"#;
 
     #[test]
@@ -304,7 +306,7 @@ mod tests {
         assert_eq!(open[0].started, started);
         assert_eq!(open[0].what, "Review the uncommitted shop-api importer changes: 4 area re…");
         // a notification that never comes
-        assert!(background_of(&path, started + MAX_AGE_MS + 1.0, &none).open.is_empty());
+        assert!(background_of(&path, started + WORKFLOW_MAX_AGE_MS + 1.0, &none).open.is_empty());
         let mut file = std::fs::OpenOptions::new().append(true).open(&path).expect("open");
         writeln!(file, "{FINISHED}").expect("append");
         drop(file);
@@ -410,10 +412,10 @@ mod tests {
     const BRIEF: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01ExampleReadCall0000003","name":"Read","input":{"file_path":"C:\\Users\\me\\notes\\plan.txt","offset":120,"limit":140}}]}}"#;
     const QUOTED: &str = concat!(
         r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleReadCall0000003","type":"tool_result","content":"134\t   * To check: a result that quotes 'Workflow … Task "#,
-        r#"ID: wf_x' opens no workflow."}]},"timestamp":"2026-10-30T12:05:00.000Z","toolUseResult":{"type":"text"}}"#
+        r#"ID: wf_x' opens no workflow."}]},"timestamp":"2026-10-30T12:05:00.000Z","tool_use_result":{"type":"text"}}"#
     );
     const HARDEN: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01ExampleFlowCall0000004","name":"Workflow","input":{"script":"export const meta = {\n  name: 'example-flow',\n}"}}]}}"#;
-    const HARDENING: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleFlowCall0000004","type":"tool_result","content":"Workflow launched in background. Task ID: w6abcdefg\nSummary: Tidy the merged shop-web fixes in 4 small areas (each reviewed, fixed if needed) and run a final review of the tree\nTranscript dir: C:\\Users\\me\\.claude\\projects\\p\\s\\subagents\\workflows\\wf_5f6a7b8c-9d0"}]},"timestamp":"2026-10-30T12:10:00.000Z","toolUseResult":{"status":"async_launched","taskId":"w6abcdefg","taskType":"local_workflow","runId":"wf_5f6a7b8c-9d0"}}"#;
+    const HARDENING: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleFlowCall0000004","type":"tool_result","content":"Workflow launched in background. Task ID: w6abcdefg\nSummary: Tidy the merged shop-web fixes in 4 small areas (each reviewed, fixed if needed) and run a final review of the tree\nTranscript dir: C:\\Users\\me\\.claude\\projects\\p\\s\\subagents\\workflows\\wf_5f6a7b8c-9d0"}]},"timestamp":"2026-10-30T12:10:00.000Z","tool_use_result":{"status":"async_launched","taskId":"w6abcdefg","taskType":"local_workflow","runId":"wf_5f6a7b8c-9d0"}}"#;
 
     #[test]
     fn a_quote_of_a_launch_of_the_old_form_starts_no_workflow() {
@@ -481,7 +483,7 @@ mod tests {
 
     // a shell call that outran its timeout, and its result, as Claude Code 2.1.316 writes them (shortened)
     const SLOW: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01ExampleBashCall0000005","name":"Bash","input":{"command":"make slow-test","description":"Run the slow test suite"}}]}}"#;
-    const MOVED: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleBashCall0000005","type":"tool_result","content":"Command did not complete within its 60s timeout and was moved to the background (ID: b8abcdefg). Output is being written to: C:\\Users\\me\\AppData\\Local\\Temp\\claude\\C--Users-me\\00000000-0000-4000-8000-000000000001\\tasks\\b8abcdefg.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.\nSession cwd remains C:\\Users\\me; directory changes made by the backgrounded command do not apply to subsequent commands.","is_error":false}]},"timestamp":"2026-11-02T14:00:00.000Z","toolUseResult":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b8abcdefg","timedOutAfterMs":60000}}"#;
+    const MOVED: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01ExampleBashCall0000005","type":"tool_result","content":"Command did not complete within its 60s timeout and was moved to the background (ID: b8abcdefg). Output is being written to: C:\\Users\\me\\AppData\\Local\\Temp\\claude\\C--Users-me\\00000000-0000-4000-8000-000000000001\\tasks\\b8abcdefg.output. You will be notified when it completes. It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with TaskStop. To check interim output, use Read on that file path.\nSession cwd remains C:\\Users\\me; directory changes made by the backgrounded command do not apply to subsequent commands.","is_error":false}]},"timestamp":"2026-11-02T14:00:00.000Z","tool_use_result":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b8abcdefg","timedOutAfterMs":60000}}"#;
 
     #[test]
     fn a_command_moved_to_the_background_by_its_timeout_is_named_not_opened() {
@@ -490,20 +492,20 @@ mod tests {
         assert!(s.open.is_empty());
         // a grep that prints the result names nothing, and keeps no call
         let grep = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_11","name":"Bash","input":{"command":"grep -h 'moved to the background' ~/.claude/projects/p/s.jsonl","description":"Find timed-out commands"}}]}}"#;
-        let quote = r#"{"type":"user","timestamp":"2026-11-02T15:00:00.000Z","message":{"content":[{"tool_use_id":"toolu_11","type":"tool_result","content":"{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"content\":\"Command did not complete within its 60s timeout and was moved to the background (ID: b8abcdefg).\"}]},\"toolUseResult\":{\"backgroundTaskId\":\"b8abcdefg\",\"timedOutAfterMs\":60000}}"}]},"toolUseResult":{"stdout":"{\"toolUseResult\":{\"backgroundTaskId\":\"b8abcdefg\"}}","stderr":""}}"#;
+        let quote = r#"{"type":"user","timestamp":"2026-11-02T15:00:00.000Z","message":{"content":[{"tool_use_id":"toolu_11","type":"tool_result","content":"{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"content\":\"Command did not complete within its 60s timeout and was moved to the background (ID: b8abcdefg).\"}]},\"toolUseResult\":{\"backgroundTaskId\":\"b8abcdefg\",\"timedOutAfterMs\":60000}}"}]},"tool_use_result":{"stdout":"{\"toolUseResult\":{\"backgroundTaskId\":\"b8abcdefg\"}}","stderr":""}}"#;
         let s = scan(&[grep, quote]);
         assert!(s.names.is_empty());
         assert!(s.calls.is_empty() && s.shells.is_empty());
         // a record that names an id its text does not say was moved (a tool's
         // structured result that quotes the field) names nothing
-        let record = r#"{"type":"user","timestamp":"2026-11-02T15:05:00.000Z","message":{"content":[{"tool_use_id":"toolu_13","type":"tool_result","content":"1 command moved"}]},"toolUseResult":{"structuredContent":{"backgroundTaskId":"b8abcdefg"}}}"#;
+        let record = r#"{"type":"user","timestamp":"2026-11-02T15:05:00.000Z","message":{"content":[{"tool_use_id":"toolu_13","type":"tool_result","content":"1 command moved"}]},"tool_use_result":{"structuredContent":{"backgroundTaskId":"b8abcdefg"}}}"#;
         assert!(scan(&[record]).names.is_empty());
     }
 
     // a shell call the user sent to the background by hand (Ctrl+B), and its
     // result, in the shape Claude Code 2.1.317 gives them
     const BUILD: &str = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01RkH5wqNcJ3mXv8TbLp2ZsA","name":"Bash","input":{"command":"npm run build","description":"Build the app"}}]}}"#;
-    const BY_HAND: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01RkH5wqNcJ3mXv8TbLp2ZsA","type":"tool_result","content":"Command was manually backgrounded by user with ID: b4hn2xk7q. Output is being written to: C:\\Users\\me\\AppData\\Local\\Temp\\claude\\C--Users-me\\00000000-0000-4000-8000-000000000001\\tasks\\b4hn2xk7q.output.","is_error":false}]},"timestamp":"2026-11-04T09:00:00.000Z","toolUseResult":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b4hn2xk7q","backgroundedByUser":true}}"#;
+    const BY_HAND: &str = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01RkH5wqNcJ3mXv8TbLp2ZsA","type":"tool_result","content":"Command was manually backgrounded by user with ID: b4hn2xk7q. Output is being written to: C:\\Users\\me\\AppData\\Local\\Temp\\claude\\C--Users-me\\00000000-0000-4000-8000-000000000001\\tasks\\b4hn2xk7q.output.","is_error":false}]},"timestamp":"2026-11-04T09:00:00.000Z","tool_use_result":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b4hn2xk7q","backgroundedByUser":true}}"#;
 
     #[test]
     fn a_command_the_user_moved_to_the_background_is_named_not_opened() {

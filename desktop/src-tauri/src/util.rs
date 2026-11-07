@@ -90,7 +90,11 @@ fn claude_dir(home: &Path) -> PathBuf {
 
 pub struct Paths {
     pub app: PathBuf,
+    pub recorder: PathBuf,
     pub runs: PathBuf,
+    pub pending: PathBuf,
+    pub failed: PathBuf,
+    pub engines: PathBuf,
     pub projects: PathBuf,
     pub leveldb: PathBuf,
     pub codex: PathBuf,
@@ -101,7 +105,11 @@ pub fn paths() -> Result<Paths, String> {
     let claude = claude_dir(&home);
     Ok(Paths {
         app: claude.join("claude-code-sessions"),
+        recorder: home.join(".claude/routine-recorder"),
         runs: home.join(".claude/routine-recorder/runs"),
+        pending: home.join(".claude/routine-recorder/pending"),
+        failed: home.join(".claude/routine-recorder/failed"),
+        engines: home.join(".claude/sessions"),
         projects: home.join(".claude/projects"),
         leveldb: claude.join("Local Storage/leveldb"),
         // Codex moves its folder where CODEX_HOME says
