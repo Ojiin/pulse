@@ -43,6 +43,7 @@ export function useFailure() {
   return why
 }
 export const openChat = (id: string) => invoke('open_chat', { id }).catch(failed)
+export const saveCase = (id: string) => invoke<string>('save_case', { id })
 export const setPinned = (pinned: boolean) => invoke<boolean>('set_pinned', { pinned })
 export const closePanel = () => invoke('close_panel')
 export const panelSize = (height: number, width?: number) => invoke('panel_size', { width, height })

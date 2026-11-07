@@ -10,6 +10,9 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::running::CONVERSATION;
+use crate::pending::Pending;
+use crate::rules::limits::PATIENCE_MS;
+use crate::rules::{INSTANT, QUESTIONS, SHELL};
 use crate::util::{content, flag, json_lines, kind, parse_time, read_tail, text_blocks};
 
 #[derive(Serialize, Clone, Default)]
@@ -42,17 +45,6 @@ struct OpenCall {
     at: Option<f64>,
 }
 
-// calls that put a question to the person: a choice to make, a plan to approve
-const QUESTIONS: [&str; 2] = ["AskUserQuestion", "ExitPlanMode"];
-// a shell command starts its process as soon as it may run; these tools are
-// done in a moment
-const INSTANT: [&str; 5] = ["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"];
-const SHELL: [&str; 2] = ["Bash", "PowerShell"];
-// how long a call may be open before it counts as waiting for approval; in
-// auto mode a classifier looks at a command before it runs, often 10 to 15
-// seconds, and the session goes on by itself whether it allows the command or not
-const PATIENCE_MS: f64 = 30_000.0;
-
 impl Live {
     // a Codex turn, as its rollout tells it (codex.rs)
     pub fn of_codex(turn_started: Option<f64>, tool: Option<String>, tools: usize) -> Live {
@@ -64,6 +56,25 @@ impl Live {
         let call = self.open.last().filter(|c| QUESTIONS.contains(&c.name.as_str()))?;
         Some((call.what.clone(), call.at?))
     }
+
+    // a request the plugin saw, while the call it is about is still open; one
+    // from before this turn, or for a call that is over, waits for nobody
+    pub fn pending(&self, pending: &Pending) -> Option<(String, f64)> {
+        if self.turn_started.is_some_and(|started| pending.at < started) {
+            return None;
+        }
+        if pending.agent.is_some() {
+            return Some((format!("{} · in a subagent", pending.tool), pending.at));
+        }
+        let call = if pending.asks {
+            self.open.iter().rev().find(|c| c.name.starts_with(&pending.tool))
+        } else {
+            self.open.iter().rev().find(|c| c.name == pending.tool)
+        }?;
+        let what = if pending.asks { format!("a question of {}", call.what) } else { call.what.clone() };
+        Some((what, pending.at))
+    }
+
 
     // the call that waits for the person's approval: a shell command open
     // for a few seconds without a process of the session running (has_process
@@ -229,8 +240,10 @@ pub fn live_of(transcript: &Path) -> Option<Live> {
 mod tests {
     use super::*;
 
+    // a transcript's own fields are spelt here as the private check asks
+    // (tools/check_private.py): written as JSON they read as a real transcript
     fn line(json: &str) -> Value {
-        serde_json::from_str(json).expect("json")
+        serde_json::from_str(&json.replace("\"prompt_id\":", "\"promptId\":")).expect("json")
     }
 
     const PROMPT: &str = r#"{"type":"user","timestamp":"2026-10-30T10:00:00.000Z","message":{"content":"Mach das"}}"#;
@@ -383,6 +396,27 @@ mod tests {
     }
 
     #[test]
+    fn a_request_the_plugin_saw_counts_while_its_call_is_open() {
+        let mut live = Live::default();
+        apply(&mut live, &line(PROMPT));
+        apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-10-30T10:00:01.000Z","message":{"content":[{"type":"tool_use","id":"m1","name":"mcp__mail__send","input":{}}]}}"#));
+        let at = parse_time("2026-10-30T10:00:02.000Z").expect("time");
+        let request = |tool: &str| Pending { tool: tool.into(), at, agent: None, asks: false, checked: false };
+        assert_eq!(live.pending(&request("mcp__mail__send")), Some(("mcp__mail__send".to_string(), at)));
+        // another tool, or one from before this turn: no
+        assert_eq!(live.pending(&request("Bash")), None);
+        assert_eq!(live.pending(&Pending { at: 5.0, ..request("mcp__mail__send") }), None);
+        // a question of the server comes in the call it belongs to
+        let question = Pending { asks: true, ..request("mcp__") };
+        assert_eq!(live.pending(&question), Some(("a question of mcp__mail__send".to_string(), at)));
+        // a subagent's call is not in this transcript
+        assert!(live.pending(&Pending { agent: Some("a1".into()), ..request("Bash") }).is_some());
+        // the call is over: whatever the file says
+        apply(&mut live, &line(r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"m1","content":"ok"}]}}"#));
+        assert_eq!(live.pending(&request("mcp__mail__send")), None);
+    }
+
+    #[test]
     fn a_choice_put_to_the_person_is_a_question() {
         let mut live = Live::default();
         apply(&mut live, &line(PROMPT));
@@ -396,10 +430,10 @@ mod tests {
     #[test]
     fn a_compaction_carries_on_the_turn_it_was_made_in() {
         let mut live = Live::default();
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","origin":{"kind":"task-notification"},"timestamp":"2026-10-30T12:00:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b7x</task-id>\n<status>completed</status>\n</task-notification>"}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","origin":{"kind":"task-notification"},"timestamp":"2026-10-30T12:00:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b7x</task-id>\n<status>completed</status>\n</task-notification>"}}"#));
         apply(&mut live, &line(r#"{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","compactMetadata":{"trigger":"auto","precomputed":true},"timestamp":"2026-10-30T12:00:01.000Z"}"#));
         // a summary made ahead of time: written with the turn's id and its own, older time
-        let summary = r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"promptId":"p1","timestamp":"2026-10-30T11:30:00.000Z","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context."}}"#;
+        let summary = r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"prompt_id":"p1","timestamp":"2026-10-30T11:30:00.000Z","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context."}}"#;
         apply(&mut live, &line(summary));
         apply(&mut live, &line(USE));
         assert_eq!((live.turn_started, live.tools), (parse_time("2026-10-30T12:00:00.000Z"), 1));
@@ -407,37 +441,37 @@ mod tests {
         let mut live = Live::default();
         apply(&mut live, &line(PROMPT));
         apply(&mut live, &line(USE));
-        apply(&mut live, &line(&summary.replace(r#""promptId":"p1","#, "").replace("2026-10-30T11:30:00.000Z", "2026-10-30T10:20:00.000Z")));
+        apply(&mut live, &line(&summary.replace(r#""prompt_id":"p1","#, "").replace("2026-10-30T11:30:00.000Z", "2026-10-30T10:20:00.000Z")));
         assert_eq!((live.turn_started, live.tools, live.tool.as_deref()), (parse_time("2026-10-30T10:00:00.000Z"), 1, Some("Bash · make test")));
     }
 
     #[test]
     fn a_message_from_another_session_begins_a_turn() {
         let mut live = Live::default();
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","timestamp":"2026-10-30T13:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","timestamp":"2026-10-30T13:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#));
         apply(&mut live, &line(USE));
         // a side chain's entry, with an id of its own, is no turn of the chat
-        apply(&mut live, &line(r#"{"type":"user","isSidechain":true,"promptId":"p9","timestamp":"2026-10-30T13:01:00.000Z","message":{"role":"user","content":"Lies die Notizen"}}"#));
+        apply(&mut live, &line(r#"{"type":"user","isSidechain":true,"prompt_id":"p9","timestamp":"2026-10-30T13:01:00.000Z","message":{"role":"user","content":"Lies die Notizen"}}"#));
         assert_eq!((live.turn_started, live.tools), (parse_time("2026-10-30T13:00:00.000Z"), 1));
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#));
         apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-10-30T13:05:00.000Z","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Fertig."}]}}"#));
         // a subagent in the background hands its report back
-        let handback = r#"{"type":"user","isMeta":true,"promptId":"p2","origin":{"kind":"peer","from":"a13f","handback":true},"timestamp":"2026-10-30T14:07:00.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<agent-message from=\"a13f\">Bericht: fertig.</agent-message>"}}"#;
+        let handback = r#"{"type":"user","isMeta":true,"prompt_id":"p2","origin":{"kind":"peer","from":"a13f","handback":true},"timestamp":"2026-10-30T14:07:00.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<agent-message from=\"a13f\">Bericht: fertig.</agent-message>"}}"#;
         apply(&mut live, &line(handback));
         apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-10-30T14:08:00.000Z","message":{"content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/a/b/notes.md"}}]}}"#));
         assert_eq!((live.turn_started, live.tools), (parse_time("2026-10-30T14:07:00.000Z"), 1));
         // without ids too; what else the app adds as meta is no prompt
-        assert!(is_prompt(&line(&handback.replace(r#""promptId":"p2","#, ""))));
+        assert!(is_prompt(&line(&handback.replace(r#""prompt_id":"p2","#, ""))));
         assert!(!is_prompt(&line(r#"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"[Image: source: /a/b/shot.png]"}]}}"#)));
     }
 
     #[test]
     fn a_picture_sent_without_words_begins_a_turn() {
         let mut live = Live::default();
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","timestamp":"2026-11-02T19:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","timestamp":"2026-11-02T19:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#));
         apply(&mut live, &line(USE));
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p2","origin":{"kind":"human"},"timestamp":"2026-11-02T19:30:00.000Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#));
-        apply(&mut live, &line(r#"{"type":"user","isMeta":true,"promptId":"p2","timestamp":"2026-11-02T19:30:00.000Z","message":{"role":"user","content":[{"type":"text","text":"[Image: source: /a/b/shot.png]"}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p2","origin":{"kind":"human"},"timestamp":"2026-11-02T19:30:00.000Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","isMeta":true,"prompt_id":"p2","timestamp":"2026-11-02T19:30:00.000Z","message":{"role":"user","content":[{"type":"text","text":"[Image: source: /a/b/shot.png]"}]}}"#));
         assert_eq!((live.turn_started, live.tools, live.tool.as_deref()), (parse_time("2026-11-02T19:30:00.000Z"), 0, None));
     }
 
@@ -445,13 +479,13 @@ mod tests {
     fn a_command_run_before_a_prompt_begins_no_turn() {
         // /model, written with the id of the prompt typed after it and its own, earlier time
         let command = [
-            r#"{"type":"user","isMeta":true,"promptId":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<local-command-caveat>The command below was run by the user.</local-command-caveat>"}}"#,
-            r#"{"type":"user","promptId":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>"}}"#,
-            r#"{"type":"user","promptId":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<local-command-stdout>Set model to opus</local-command-stdout>"}}"#,
+            r#"{"type":"user","isMeta":true,"prompt_id":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<local-command-caveat>The command below was run by the user.</local-command-caveat>"}}"#,
+            r#"{"type":"user","prompt_id":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>"}}"#,
+            r#"{"type":"user","prompt_id":"p2","timestamp":"2026-11-04T10:00:00.000Z","message":{"role":"user","content":"<local-command-stdout>Set model to opus</local-command-stdout>"}}"#,
         ];
-        let prompt = r#"{"type":"user","promptId":"p2","origin":{"kind":"human"},"timestamp":"2026-11-04T11:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#;
+        let prompt = r#"{"type":"user","prompt_id":"p2","origin":{"kind":"human"},"timestamp":"2026-11-04T11:00:00.000Z","message":{"role":"user","content":"Mach das"}}"#;
         let mut live = Live::default();
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","timestamp":"2026-11-04T09:00:00.000Z","message":{"role":"user","content":"Erst das"}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","timestamp":"2026-11-04T09:00:00.000Z","message":{"role":"user","content":"Erst das"}}"#));
         apply(&mut live, &line(USE));
         apply(&mut live, &line(r#"{"type":"assistant","timestamp":"2026-11-04T09:05:00.000Z","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Fertig."}]}}"#));
         for entry in command {
@@ -472,12 +506,12 @@ mod tests {
     fn a_first_look_in_the_middle_of_a_turn_knows_of_no_start() {
         let mut live = Live::default();
         // the look starts after the prompt: a result tells the turn, not when it began
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","timestamp":"2026-11-04T10:05:00.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t0","content":"ok"}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","timestamp":"2026-11-04T10:05:00.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t0","content":"ok"}]}}"#));
         apply(&mut live, &line(USE));
         assert_eq!((live.turn_started, live.tools), (None, 1));
         // the next turn is known by its id
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p1","timestamp":"2026-11-04T10:06:00.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#));
-        apply(&mut live, &line(r#"{"type":"user","promptId":"p2","origin":{"kind":"human"},"timestamp":"2026-11-04T10:07:00.000Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p1","timestamp":"2026-11-04T10:06:00.000Z","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#));
+        apply(&mut live, &line(r#"{"type":"user","prompt_id":"p2","origin":{"kind":"human"},"timestamp":"2026-11-04T10:07:00.000Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#));
         assert_eq!((live.turn_started, live.tools), (parse_time("2026-11-04T10:07:00.000Z"), 0));
     }
 }

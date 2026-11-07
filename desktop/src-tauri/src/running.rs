@@ -9,15 +9,12 @@ use std::sync::{LazyLock, Mutex};
 
 use serde_json::Value;
 
+use crate::rules::limits::TURN_STALE_MS;
 use crate::util::{content, flag, is_handback, json_lines, kind, mtime_ms, parse_time, read_tail};
 
 // read the end of the file, more of it while no whole entry fits (one tool
 // result can be larger than the first window)
 const TAIL_STEPS: [u64; 3] = [64 * 1024, 512 * 1024, 2 * 1024 * 1024];
-// a turn whose last entry is older than this is taken as ended (it crashed,
-// or the app was closed in the middle of it)
-const STALE_MS: f64 = 30.0 * 60_000.0;
-
 // the entries of the conversation itself; the app writes more kinds beside
 // them (cost, title, mode, a PR link, an API request …) and adds new ones, which
 // say nothing about whether a turn is open
@@ -56,7 +53,7 @@ pub fn is_turn_open(lines: &[Value], now: f64, is_subagent: bool) -> bool {
             return false;
         }
     }
-    let is_recent = |line: &Value| line.get("timestamp").and_then(Value::as_str).and_then(parse_time).is_some_and(|at| now - at < STALE_MS);
+    let is_recent = |line: &Value| line.get("timestamp").and_then(Value::as_str).and_then(parse_time).is_some_and(|at| now - at < TURN_STALE_MS);
     // a compaction's summary carries on the turn it was made in, or none: what
     // came before it tells, else its own time
     let mut summary = None;
